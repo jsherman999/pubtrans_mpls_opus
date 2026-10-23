@@ -40,7 +40,7 @@ The box is a parameter of `tools/build_osm.py` and can be widened later without 
   keep its README as `docs/SOURCE_README.md`, add this plan, `.nojekyll`, `.gitignore`.
 - Exit: repo builds and serves exactly like the source; plan committed.
 
-### Phase 1 — Street-network pipeline (`tools/build_osm.py`) ✅ code / ⏳ real data
+### Phase 1 — Street-network pipeline (`tools/build_osm.py`) ✅
 - Fetch drivable ways from Overpass for the box (+ buffer), or read a saved raw file.
 - Filter: drop `access`/`motor_vehicle=no|private`, parking aisles, driveways, drive-throughs.
   Keep **transit-only streets** (Nicollet Mall, Washington Ave transitway, etc.) as `psvOnly`
@@ -62,12 +62,14 @@ The box is a parameter of `tools/build_osm.py` and can be widened later without 
 - Exit: real build run; report shows every expected Mississippi road bridge in the box, the
   downtown one-way pairs, Nicollet Mall as psv-only, and < 2 % of link length dropped by SCC pruning.
 
-### Phase 2 — Street map view (`viewer.html`) ✅ code
+### Phase 2 — Street map view (`viewer.html`) ✅
 - Standalone viewer that loads `data/mpls_graph.js`: fits the whole area on load and on resize
   until the user moves the map; wheel/pinch zoom around the pointer; drag to pan; Fit button.
 - Level of detail: service roads/alleys hidden when zoomed out; names, signals, stops, one-way
   arrows and portals appear as you zoom in; each road class batched into one path per frame.
 - Tap/click a street to inspect name, class, speed, lanes, one-way, bridge, psv-only.
+- Portal markers (205 on the real network) are hidden at whole-area zoom and grow to full size
+  by street zoom, so they do not crowd the edge of the map.
 - Light/dark aware; device-pixel-ratio-correct canvas; same coordinate conventions the sim will use.
 - Exit: whole area visible on a phone at load; smooth pan/zoom; street inspection works.
   This canvas/transform code becomes the sim's map layer in Phase 3.
@@ -100,13 +102,31 @@ Split into four steps so each lands green on its own.
 - Tests (in `tests/routing.test.cjs`): no two conflicting greens, each group green 30 s per cycle,
   waits bounded, internal links never wait, stop-sign holds.
 
-**3c — Vehicle motion on real links (`src/motion.js`)**
-- Vehicle state on an arc: `(arc, s)` with positions from `pointAlong`; time-based movement at the
-  link speed carried across short links, as in the source's `stepCars`.
-- Per-direction lane occupancy replaces `edgeKey(a,b)` claims; car following with the source's
-  8 m gap across arc boundaries; stop at signals/stop signs using 3b.
-- Tests: no vehicle ever on an illegal arc, gaps never violated, vehicles drain from a closed
-  approach once it reopens.
+**3c — Vehicle motion on real links (`src/motion.js`) ✅**
+- Vehicle state on an arc: `(arc, s, lane)`; positions from the link polyline with a per-lane
+  offset to the right of travel; time-based movement at the link speed carried across short
+  links, as in the source's `stepCars`.
+- Per-direction lane occupancy (each lane a front-first queue, `lanes` from OSM, at least one)
+  replaces `edgeKey(a,b)` claims. Car following keeps the source's 8 m gap within a lane and
+  across arc boundaries along the vehicle's own route; a vehicle joins the lane with the most
+  room. Leaders move before followers within a step (recursively, cycle-safe), so platoons move
+  together instead of in list order.
+- Controls from 3b at the stop line: red signals hold (checked at the exact time the vehicle
+  reaches the line), stop signs hold 3 s, closed arcs (`setClosed`) hold traffic upstream and
+  spill back across links. No control applies on a route's final arc (arrival at the curb).
+- `checkRoute` refuses illegal routes (shuttle-only arcs for private cars, gaps, portal transit);
+  `check()` audits lane bookkeeping, spacing, positions and legality for tests.
+- `connectedCore(mode)` in `src/routing.js`: the largest set of intersections that reach one
+  another without leaving the map. On the real network it is 4,855 of 5,122 (5.2 % are
+  reachable only via the outside), so trips are placed in the core; freeway through-traffic
+  runs portal to portal (48 freeway entry→exit routes longer than 1.5 km).
+- Tests: `node tests/motion.test.cjs` — carry across short links, gaps within a link and across
+  a node, red-light hold and ordered discharge, stop-sign hold, a closed approach that queues
+  16 cars back across links and drains them first-in-first-out once reopened, multi-lane
+  queues, legality; 300 vehicles for an hour on a signalized grid (all drain afterwards); on
+  the real network 400 vehicles plus 40 freeway through-trips, then 3,400 vehicles with no
+  queue wait over 2 minutes (no gridlock).
+- Result: 0.08 ms per 3 s step for 400 vehicles and 0.6 ms for 3,400 on desktop Node.
 
 **3d — Engine integration (`index.html` → real graph)**
 - Replace grid assumptions: `GRID_N`, `nodeColRow`, `nodeId(c,r)`, `BUILDINGS{col,row}`, the
@@ -183,8 +203,9 @@ Split into four steps so each lands green on its own.
 | Phase | Status | Notes |
 |---|---|---|
 | 0 | done | Source imported unchanged at `60774088`. |
-| 1 | code done | Pipeline + fixture tests pass. Needs one real run with network access to Overpass. |
-| 2 | code done | `viewer.html` renders whatever `data/mpls_graph.js` contains; currently the fixture sample. |
-| 3a | done | Router + viewer route preview; A* 0.46 ms/route on a 7,000-node grid. |
+| 1 | done | Real build committed (`62a31dd`): 5,327 nodes, 6,614 links, 11,007 arcs, 459 km, 541 KB; all Mississippi road bridges in the box (Plymouth, Hennepin, 3rd Ave, I-35W, 10th Ave, Washington Ave, I-94, Franklin); downtown one-way pairs; Nicollet Mall and the Washington Ave transitway shuttle-only; 1.07 % of length dropped by SCC pruning. |
+| 2 | done | `viewer.html` shows the real network. Portal markers hidden/shrunk when zoomed out. |
+| 3a | done | Router + viewer route preview; A* 0.46 ms/route on a 7,000-node grid (0.12 ms on the real network). |
 | 3b | done | Signal timing and stop-sign holds. |
-| 3c–9 | not started | |
+| 3c | done | `src/motion.js`: lanes, 8 m following across links, signals, stop signs, closures; connected core. 400 vehicles 0.08 ms/step. |
+| 3d–9 | not started | |

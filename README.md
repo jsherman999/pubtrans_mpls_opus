@@ -35,7 +35,7 @@ python3 -m unittest discover -s tests -p "test_*.py"
 
 `viewer.html` draws the street network: it opens with the whole area in view; drag to pan,
 scroll or pinch to zoom, tap a street for its details (speed limit, lanes, one-way, shuttle-only,
-bridge, OSM way). Until `data/mpls_graph.js` has been built it shows a small synthetic test
+bridge, OSM way). If `data/mpls_graph.js` is missing it falls back to a small synthetic test
 network from `data/sample_graph.js`.
 
 ## Run locally
@@ -50,11 +50,13 @@ imported simulation (still the original grid until Phase 3).
 Tap **Plan a route**, then a start and an end, to compare the fastest private-car route with the
 fastest shuttle route (shuttles may also use transit-only streets and contraflow lanes).
 
-Viewer, decoder and routing tests (the routing test also benchmarks a 7,000-node synthetic grid):
+Viewer, decoder, routing and vehicle-motion tests (the routing test also benchmarks a
+7,000-node synthetic grid; the motion test runs up to 3,400 vehicles on the real network):
 
 ```
 node tests/viewer.test.cjs
 node tests/routing.test.cjs
+node tests/motion.test.cjs
 ```
 
 Source-app regression suite (slow, several minutes):

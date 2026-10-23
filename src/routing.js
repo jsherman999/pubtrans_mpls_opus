@@ -272,9 +272,57 @@
       return best;
     }
 
+    // The connected core: the largest set of non-portal nodes that can all reach one another
+    // without leaving the map (routes never pass through portals). In the real data about 5 %
+    // of intersections are reachable only by driving off the map and back in, so trips should
+    // start and end in the core. Shuttle mode may use shuttle-only arcs and so has a larger
+    // core that contains the private-car core. Iterative Tarjan; cached per mode.
+    const cores = new Map();
+    function connectedCore(mode = MODE_GENERAL) {
+      if (cores.has(mode)) return cores.get(mode);
+      const index = new Int32Array(N).fill(-1), low = new Int32Array(N), comp = new Int32Array(N).fill(-1);
+      const onStack = new Uint8Array(N), next = new Int32Array(N);
+      const stack = [], call = [];
+      let counter = 0, comps = 0, best = -1, bestSize = 0;
+      const usable = (i) => !(arcPsvOnly[i] && mode !== MODE_PSV) && !(nflags[arcTo[i]] & NODE_PORTAL);
+      for (let root = 0; root < N; root++) {
+        if (index[root] >= 0 || (nflags[root] & NODE_PORTAL)) continue;
+        index[root] = low[root] = counter++; next[root] = outStart[root];
+        stack.push(root); onStack[root] = 1; call.push(root);
+        while (call.length) {
+          const v = call[call.length - 1];
+          if (next[v] < outStart[v + 1]) {
+            const i = next[v]++;
+            if (!usable(i)) continue;
+            const w = arcTo[i];
+            if (index[w] < 0) {
+              index[w] = low[w] = counter++; next[w] = outStart[w];
+              stack.push(w); onStack[w] = 1; call.push(w);
+            } else if (onStack[w] && index[w] < low[v]) low[v] = index[w];
+            continue;
+          }
+          call.pop();
+          if (call.length) { const u = call[call.length - 1]; if (low[v] < low[u]) low[u] = low[v]; }
+          if (low[v] === index[v]) {
+            let size = 0, w;
+            do { w = stack.pop(); onStack[w] = 0; comp[w] = comps; size++; } while (w !== v);
+            if (size > bestSize) { bestSize = size; best = comps; }
+            comps++;
+          }
+        }
+      }
+      const inCore = new Uint8Array(N), nodes = [];
+      for (let v = 0; v < N; v++) if (comp[v] === best) { inCore[v] = 1; nodes.push(v); }
+      let interior = 0;
+      for (let v = 0; v < N; v++) if (!(nflags[v] & NODE_PORTAL)) interior++;
+      const core = { inCore, nodes, size: nodes.length, interior, components: comps };
+      cores.set(mode, core);
+      return core;
+    }
+
     return {
       arcs, arcCount: A, maxSpeedMps: maxMps,
-      route, search, kShortest, invalidate, routePoints, nearestNode,
+      route, search, kShortest, invalidate, routePoints, nearestNode, connectedCore,
       get epoch() { return epoch; },
       stats,
     };

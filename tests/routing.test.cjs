@@ -112,6 +112,19 @@ function checkRoute(router, g, r, from, to, mode) {
   const notPortal = router.nearestNode(0, g.height, (v) => !(g.nodes.flags[v] & G.NODE_PORTAL));
   assert.ok(!(g.nodes.flags[notPortal] & G.NODE_PORTAL));
 
+  // Connected core: no portals, every pair mutually reachable without leaving the map, and the
+  // shuttle core contains the private-car core.
+  for (const mode of [R.MODE_GENERAL, R.MODE_PSV]) {
+    const core = router.connectedCore(mode);
+    assert.ok(core.size > 0 && core.size <= core.interior);
+    for (const a of core.nodes) {
+      assert.ok(!(g.nodes.flags[a] & G.NODE_PORTAL));
+      for (const b of core.nodes) assert.ok(router.route(a, b, { mode }), `core ${a}->${b} unreachable`);
+    }
+    assert.strictEqual(router.connectedCore(mode), core, "cached");
+  }
+  assert.ok(router.connectedCore(R.MODE_GENERAL).nodes.every((v) => router.connectedCore(R.MODE_PSV).inCore[v]));
+
   // Signals: never two greens at once, waits bounded, cluster-internal links never stop.
   const sig = T.createSignals(g);
   for (let c = 0; c < g.controllers.length; c++)
@@ -142,7 +155,7 @@ function checkRoute(router, g, r, from, to, mode) {
     if (arc.stop && arc.signal === -1) { stops++; assert.strictEqual(sig.controlDelay(arc, 0), T.STOP_HOLD); }
   }
   assert.ok(signalArcs > 0 && internal > 0 && stops > 0, "fixture should exercise signals, clusters and stops");
-  console.log(`PASS: sample network — ${pairs} optimal routes in both modes, one-ways, contraflow, transit mall, bans, alternatives, cache, nearest node, signals.`);
+  console.log(`PASS: sample network — ${pairs} optimal routes in both modes, one-ways, contraflow, transit mall, bans, alternatives, cache, nearest node, connected core, signals.`);
 }
 
 // ------------------------------------------------------------ synthetic study-area-size grid
