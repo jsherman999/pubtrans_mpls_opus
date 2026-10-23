@@ -40,7 +40,7 @@ The box is a parameter of `tools/build_osm.py` and can be widened later without 
   keep its README as `docs/SOURCE_README.md`, add this plan, `.nojekyll`, `.gitignore`.
 - Exit: repo builds and serves exactly like the source; plan committed.
 
-### Phase 1 — Street-network pipeline (`tools/build_osm.py`)
+### Phase 1 — Street-network pipeline (`tools/build_osm.py`) ✅ code / ⏳ real data
 - Fetch drivable ways from Overpass for the box (+ buffer), or read a saved raw file.
 - Filter: drop `access`/`motor_vehicle=no|private`, parking aisles, driveways, drive-throughs.
   Keep **transit-only streets** (Nicollet Mall, Washington Ave transitway, etc.) as `psvOnly`
@@ -152,4 +152,5 @@ The box is a parameter of `tools/build_osm.py` and can be widened later without 
 | Phase | Status | Notes |
 |---|---|---|
 | 0 | done | Source imported unchanged at `60774088`. |
-| 1–9 | not started | |
+| 1 | code done | Pipeline + fixture tests pass. Needs one real run with network access to Overpass. |
+| 2–9 | not started | |

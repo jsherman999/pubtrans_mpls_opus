@@ -10,6 +10,27 @@ from `index.html` while the port is in progress; its original documentation is i
 
 See **[PLAN.md](PLAN.md)** for the phased build plan and current progress.
 
+Street data © OpenStreetMap contributors (ODbL).
+
+## Build the street network
+
+Street geometry comes from OpenStreetMap through a one-time offline build (Python 3 standard
+library only). It needs network access to the Overpass API:
+
+```
+python3 tools/build_osm.py --fetch
+```
+
+This writes `data/mpls_graph.js` (loaded by the page) and `data/mpls_graph.report.json` (review
+it), and saves the raw download to `data/raw/` (gitignored). Rebuild from a saved download with
+`--input data/raw/osm_roads.json`. Format: [`docs/DATA_FORMAT.md`](docs/DATA_FORMAT.md).
+
+Pipeline tests:
+
+```
+python3 -m unittest discover -s tests -p "test_*.py"
+```
+
 ## Run locally
 
 ```
