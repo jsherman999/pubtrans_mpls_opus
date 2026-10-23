@@ -1,0 +1,1981 @@
+{
+  "format_version": 1,
+  "bbox": [
+    44.96,
+    -93.292,
+    44.997,
+    -93.215
+  ],
+  "size_m": [
+    6073.5,
+    4111.9
+  ],
+  "nodes": 5327,
+  "links": 6614,
+  "directed_arcs": 11007,
+  "km_total": 458.69,
+  "km_by_class": {
+    "residential": 100.02,
+    "tertiary": 88.32,
+    "service": 74.69,
+    "secondary": 52.81,
+    "motorway_link": 47.82,
+    "unclassified": 39.56,
+    "motorway": 38.67,
+    "primary": 12.1,
+    "living_street": 2.37,
+    "tertiary_link": 1.02,
+    "secondary_link": 0.96,
+    "primary_link": 0.36
+  },
+  "signal_controllers": 356,
+  "signalized_nodes": 434,
+  "stop_approaches": 562,
+  "portals": [
+    {
+      "node": 15,
+      "name": "33rd Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 5367.9,
+      "y_m": 4111.9
+    },
+    {
+      "node": 16,
+      "name": "Northeast Summer Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 3631.4,
+      "y_m": 0.0
+    },
+    {
+      "node": 27,
+      "name": "17th Avenue North",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 75.6
+    },
+    {
+      "node": 39,
+      "name": "North 11th Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 840.4
+    },
+    {
+      "node": 49,
+      "name": "Minneapolis Avenue South",
+      "class": "residential",
+      "entry": false,
+      "exit": true,
+      "x_m": 5382.5,
+      "y_m": 4111.9
+    },
+    {
+      "node": 68,
+      "name": "North Lyn-Park Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 460.5,
+      "y_m": 0.0
+    },
+    {
+      "node": 78,
+      "name": "Northeast University Avenue",
+      "class": "secondary",
+      "entry": true,
+      "exit": true,
+      "x_m": 2321.5,
+      "y_m": 0.0
+    },
+    {
+      "node": 122,
+      "name": "Clinton Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 1617.6,
+      "y_m": 4111.9
+    },
+    {
+      "node": 135,
+      "name": "10th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 2549.7,
+      "y_m": 4111.9
+    },
+    {
+      "node": 141,
+      "name": "Southeast Barton Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 3307.1
+    },
+    {
+      "node": 147,
+      "name": "Snelling Avenue",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 3765.8,
+      "y_m": 4111.9
+    },
+    {
+      "node": 212,
+      "name": "23rd Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 4154.1,
+      "y_m": 4111.9
+    },
+    {
+      "node": 271,
+      "name": "Southeast Kasota Avenue",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 1673.3
+    },
+    {
+      "node": 310,
+      "name": "Stinson Service Road",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 5109.2,
+      "y_m": 0.0
+    },
+    {
+      "node": 319,
+      "name": "22nd Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 4028.4,
+      "y_m": 4111.9
+    },
+    {
+      "node": 333,
+      "name": "Lincoln Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3617.6
+    },
+    {
+      "node": 345,
+      "name": "East River Terrace",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 3844.5
+    },
+    {
+      "node": 373,
+      "name": "Northeast Quincy Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 3221.0,
+      "y_m": 0.0
+    },
+    {
+      "node": 375,
+      "name": "Olson Memorial Highway Frontage Road South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1432.2
+    },
+    {
+      "node": 406,
+      "name": "Southeast Melbourne Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 3501.7
+    },
+    {
+      "node": 478,
+      "name": "Pleasant Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 715.0,
+      "y_m": 4111.9
+    },
+    {
+      "node": 529,
+      "name": "North 14th Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 438.2
+    },
+    {
+      "node": 581,
+      "name": "Northeast 4th Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 2460.9,
+      "y_m": 0.0
+    },
+    {
+      "node": 609,
+      "name": "Bloomington Avenue",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 3127.2,
+      "y_m": 4111.9
+    },
+    {
+      "node": 657,
+      "name": "Northeast 7th Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 2714.1,
+      "y_m": 0.0
+    },
+    {
+      "node": 678,
+      "name": "Northeast Taft Street",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 5353.6,
+      "y_m": 0.0
+    },
+    {
+      "node": 695,
+      "name": "Northeast Arthur Street",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 4727.6,
+      "y_m": 0.0
+    },
+    {
+      "node": 753,
+      "name": "5th Avenue North",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1581.3
+    },
+    {
+      "node": 758,
+      "name": "32nd Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 5251.7,
+      "y_m": 4111.9
+    },
+    {
+      "node": 776,
+      "name": "North Bryant Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1268.1
+    },
+    {
+      "node": 782,
+      "name": "Dupont Avenue South",
+      "class": "residential",
+      "entry": false,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3181.2
+    },
+    {
+      "node": 790,
+      "name": "Southeast Sidney Place",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 2992.8
+    },
+    {
+      "node": 795,
+      "name": "25th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 4400.4,
+      "y_m": 4111.9
+    },
+    {
+      "node": 834,
+      "name": "Northeast Monroe Street",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 3120.5,
+      "y_m": 0.0
+    },
+    {
+      "node": 863,
+      "name": "16th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 3224.9,
+      "y_m": 4111.9
+    },
+    {
+      "node": 865,
+      "name": "Northeast Cleveland Street",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 4822.7,
+      "y_m": 0.0
+    },
+    {
+      "node": 946,
+      "name": "North Aldrich Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 196.5,
+      "y_m": 0.0
+    },
+    {
+      "node": 973,
+      "name": "Northeast Spring Street",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 198.3
+    },
+    {
+      "node": 1006,
+      "name": "North Lyn-Curve Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 558.6,
+      "y_m": 0.0
+    },
+    {
+      "node": 1017,
+      "name": "2nd Avenue North",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 2005.1
+    },
+    {
+      "node": 1038,
+      "name": "Southeast Malcolm Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 3159.2
+    },
+    {
+      "node": 1052,
+      "name": "Northeast Jackson Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 3321.0,
+      "y_m": 0.0
+    },
+    {
+      "node": 1059,
+      "name": "Oakland Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 2018.4,
+      "y_m": 4111.9
+    },
+    {
+      "node": 1061,
+      "name": "Linden Avenue West",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 2436.5
+    },
+    {
+      "node": 1095,
+      "name": "29th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 4901.6,
+      "y_m": 4111.9
+    },
+    {
+      "node": 1104,
+      "name": "Garfield Avenue",
+      "class": "residential",
+      "entry": false,
+      "exit": true,
+      "x_m": 414.2,
+      "y_m": 4111.9
+    },
+    {
+      "node": 1109,
+      "name": "Emerson Avenue South",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 2797.7
+    },
+    {
+      "node": 1158,
+      "name": "Northeast Washington Street",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 2719.2,
+      "y_m": 0.0
+    },
+    {
+      "node": 1174,
+      "name": "Grand Avenue South",
+      "class": "residential",
+      "entry": false,
+      "exit": true,
+      "x_m": 614.0,
+      "y_m": 4111.9
+    },
+    {
+      "node": 1260,
+      "name": "",
+      "class": "motorway_link",
+      "entry": false,
+      "exit": true,
+      "x_m": 4249.2,
+      "y_m": 0.0
+    },
+    {
+      "node": 1274,
+      "name": "Groveland Terrace",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3156.6
+    },
+    {
+      "node": 1331,
+      "name": "Northeast Van Buren Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 3421.5,
+      "y_m": 0.0
+    },
+    {
+      "node": 1337,
+      "name": "17th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 3324.2,
+      "y_m": 4111.9
+    },
+    {
+      "node": 1355,
+      "name": "Northeast Jefferson Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 2919.2,
+      "y_m": 0.0
+    },
+    {
+      "node": 1359,
+      "name": "Northeast Harding Street",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 5544.4,
+      "y_m": 0.0
+    },
+    {
+      "node": 1369,
+      "name": "Summit Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3508.3
+    },
+    {
+      "node": 1375,
+      "name": "Kenwood Parkway",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3015.0
+    },
+    {
+      "node": 1430,
+      "name": "Elliot Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 2437.7,
+      "y_m": 4111.9
+    },
+    {
+      "node": 1433,
+      "name": "Southeast Seymour Place",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 4005.5
+    },
+    {
+      "node": 1473,
+      "name": "24th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 4279.3,
+      "y_m": 4111.9
+    },
+    {
+      "node": 1484,
+      "name": "North 15th Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 316.7
+    },
+    {
+      "node": 1500,
+      "name": "15th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 3032.7,
+      "y_m": 4111.9
+    },
+    {
+      "node": 1503,
+      "name": "Southeast Como Avenue",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 1003.1
+    },
+    {
+      "node": 1545,
+      "name": "Southeast Arthur Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 2958.9
+    },
+    {
+      "node": 1553,
+      "name": "Northeast Adams Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 2818.4,
+      "y_m": 0.0
+    },
+    {
+      "node": 1555,
+      "name": "Southeast 27th Avenue",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 1074.5
+    },
+    {
+      "node": 1585,
+      "name": "Douglas Avenue",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3398.7
+    },
+    {
+      "node": 1622,
+      "name": "North 16th Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 195.9
+    },
+    {
+      "node": 1637,
+      "name": "28th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 4776.5,
+      "y_m": 4111.9
+    },
+    {
+      "node": 1658,
+      "name": "North 8th Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1187.0
+    },
+    {
+      "node": 1664,
+      "name": "North Lyndale Avenue",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 315.3,
+      "y_m": 0.0
+    },
+    {
+      "node": 1679,
+      "name": "North Plymouth Avenue",
+      "class": "secondary",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 558.2
+    },
+    {
+      "node": 1772,
+      "name": "",
+      "class": "motorway_link",
+      "entry": true,
+      "exit": false,
+      "x_m": 0.0,
+      "y_m": 2555.8
+    },
+    {
+      "node": 1774,
+      "name": "I 394 EXPR",
+      "class": "motorway_link",
+      "entry": true,
+      "exit": false,
+      "x_m": 0.0,
+      "y_m": 2534.5
+    },
+    {
+      "node": 1838,
+      "name": "",
+      "class": "motorway_link",
+      "entry": false,
+      "exit": true,
+      "x_m": 3655.9,
+      "y_m": 4111.9
+    },
+    {
+      "node": 1845,
+      "name": "",
+      "class": "motorway_link",
+      "entry": true,
+      "exit": false,
+      "x_m": 673.3,
+      "y_m": 0.0
+    },
+    {
+      "node": 1927,
+      "name": "Northeast 2nd Street",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 2181.2,
+      "y_m": 0.0
+    },
+    {
+      "node": 1986,
+      "name": "Portland Avenue",
+      "class": "tertiary",
+      "entry": false,
+      "exit": true,
+      "x_m": 1919.6,
+      "y_m": 4111.9
+    },
+    {
+      "node": 1993,
+      "name": "Northeast Main Street",
+      "class": "residential",
+      "entry": false,
+      "exit": true,
+      "x_m": 2046.6,
+      "y_m": 0.0
+    },
+    {
+      "node": 1994,
+      "name": "I 35W",
+      "class": "motorway",
+      "entry": true,
+      "exit": false,
+      "x_m": 4206.6,
+      "y_m": 0.0
+    },
+    {
+      "node": 2092,
+      "name": "",
+      "class": "motorway_link",
+      "entry": true,
+      "exit": false,
+      "x_m": 3593.2,
+      "y_m": 4111.9
+    },
+    {
+      "node": 2094,
+      "name": "Hiawatha Avenue",
+      "class": "motorway",
+      "entry": true,
+      "exit": false,
+      "x_m": 3580.2,
+      "y_m": 4111.9
+    },
+    {
+      "node": 2097,
+      "name": "Hiawatha Avenue",
+      "class": "motorway",
+      "entry": false,
+      "exit": true,
+      "x_m": 3558.7,
+      "y_m": 4111.9
+    },
+    {
+      "node": 2123,
+      "name": "Northeast Madison Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 3019.5,
+      "y_m": 0.0
+    },
+    {
+      "node": 2202,
+      "name": "Colfax Avenue South",
+      "class": "residential",
+      "entry": false,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3905.4
+    },
+    {
+      "node": 2249,
+      "name": "Stevens Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 1316.5,
+      "y_m": 4111.9
+    },
+    {
+      "node": 2274,
+      "name": "Lyndale Avenue South",
+      "class": "primary",
+      "entry": true,
+      "exit": true,
+      "x_m": 314.6,
+      "y_m": 4111.9
+    },
+    {
+      "node": 2310,
+      "name": "",
+      "class": "motorway_link",
+      "entry": false,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 2483.8
+    },
+    {
+      "node": 2321,
+      "name": "I 394",
+      "class": "motorway",
+      "entry": false,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 2514.6
+    },
+    {
+      "node": 2400,
+      "name": "",
+      "class": "motorway_link",
+      "entry": false,
+      "exit": true,
+      "x_m": 769.0,
+      "y_m": 0.0
+    },
+    {
+      "node": 2403,
+      "name": "I 94",
+      "class": "motorway",
+      "entry": true,
+      "exit": false,
+      "x_m": 695.7,
+      "y_m": 0.0
+    },
+    {
+      "node": 2543,
+      "name": "27th Avenue South",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 4652.1,
+      "y_m": 4111.9
+    },
+    {
+      "node": 2545,
+      "name": "I 394",
+      "class": "motorway",
+      "entry": true,
+      "exit": false,
+      "x_m": 0.0,
+      "y_m": 2531.1
+    },
+    {
+      "node": 2546,
+      "name": "Southeast Weeks Avenue",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 1276.9
+    },
+    {
+      "node": 2607,
+      "name": "4th Avenue North",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1704.5
+    },
+    {
+      "node": 2631,
+      "name": "Northeast Ramsey Street",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 1771.5,
+      "y_m": 0.0
+    },
+    {
+      "node": 2657,
+      "name": "West River Road North",
+      "class": "tertiary",
+      "entry": true,
+      "exit": false,
+      "x_m": 1185.4,
+      "y_m": 0.0
+    },
+    {
+      "node": 2719,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1336.0
+    },
+    {
+      "node": 2754,
+      "name": "Cedar Avenue South",
+      "class": "secondary",
+      "entry": true,
+      "exit": false,
+      "x_m": 3574.5,
+      "y_m": 4111.9
+    },
+    {
+      "node": 2756,
+      "name": "North Washington Avenue",
+      "class": "primary",
+      "entry": false,
+      "exit": true,
+      "x_m": 825.0,
+      "y_m": 0.0
+    },
+    {
+      "node": 2758,
+      "name": "I 94",
+      "class": "motorway",
+      "entry": false,
+      "exit": true,
+      "x_m": 718.7,
+      "y_m": 0.0
+    },
+    {
+      "node": 2778,
+      "name": "Dunwoody Boulevard",
+      "class": "secondary",
+      "entry": false,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 2765.7
+    },
+    {
+      "node": 2811,
+      "name": "Northeast Main Street",
+      "class": "residential",
+      "entry": true,
+      "exit": false,
+      "x_m": 2035.3,
+      "y_m": 0.0
+    },
+    {
+      "node": 2843,
+      "name": "West River Parkway",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 5589.4,
+      "y_m": 4111.9
+    },
+    {
+      "node": 2875,
+      "name": "13th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 2825.9,
+      "y_m": 4111.9
+    },
+    {
+      "node": 2889,
+      "name": "East 22nd Street",
+      "class": "tertiary",
+      "entry": false,
+      "exit": true,
+      "x_m": 3527.1,
+      "y_m": 4111.9
+    },
+    {
+      "node": 2946,
+      "name": "Seabury Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 5531.0,
+      "y_m": 4111.9
+    },
+    {
+      "node": 2957,
+      "name": "Northeast Marshall Street",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 1901.5,
+      "y_m": 0.0
+    },
+    {
+      "node": 2969,
+      "name": "West River Road North",
+      "class": "tertiary",
+      "entry": false,
+      "exit": true,
+      "x_m": 1197.5,
+      "y_m": 0.0
+    },
+    {
+      "node": 2993,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": false,
+      "x_m": 4798.0,
+      "y_m": 4111.9
+    },
+    {
+      "node": 3031,
+      "name": "Northeast Central Avenue",
+      "class": "primary",
+      "entry": false,
+      "exit": true,
+      "x_m": 3526.4,
+      "y_m": 0.0
+    },
+    {
+      "node": 3135,
+      "name": "West Franklin Avenue",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3810.2
+    },
+    {
+      "node": 3208,
+      "name": "I 94",
+      "class": "motorway",
+      "entry": true,
+      "exit": false,
+      "x_m": 6073.5,
+      "y_m": 3660.7
+    },
+    {
+      "node": 3282,
+      "name": "5th Street Northeast",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 2601.0,
+      "y_m": 0.0
+    },
+    {
+      "node": 3307,
+      "name": "Southeast Orlin Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 3097.9
+    },
+    {
+      "node": 3308,
+      "name": "Southeast Franklin Avenue",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 3605.4
+    },
+    {
+      "node": 3316,
+      "name": "Northeast Hoover Street",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 5856.5,
+      "y_m": 0.0
+    },
+    {
+      "node": 3366,
+      "name": "Northeast Sibley Street",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 1627.8,
+      "y_m": 0.0
+    },
+    {
+      "node": 3373,
+      "name": "Northeast Polk Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 3722.4,
+      "y_m": 0.0
+    },
+    {
+      "node": 3391,
+      "name": "Northeast Pierce Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 4024.3,
+      "y_m": 0.0
+    },
+    {
+      "node": 3398,
+      "name": "Northeast 8th Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 2412.6,
+      "y_m": 0.0
+    },
+    {
+      "node": 3405,
+      "name": "North 7th Street",
+      "class": "secondary",
+      "entry": true,
+      "exit": false,
+      "x_m": 0.0,
+      "y_m": 745.2
+    },
+    {
+      "node": 3407,
+      "name": "North Washington Avenue",
+      "class": "primary",
+      "entry": true,
+      "exit": false,
+      "x_m": 810.5,
+      "y_m": 0.0
+    },
+    {
+      "node": 3430,
+      "name": "North 2nd Street",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 950.9,
+      "y_m": 0.0
+    },
+    {
+      "node": 3445,
+      "name": "North 10th Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 984.1
+    },
+    {
+      "node": 3452,
+      "name": "Olson Memorial Highway",
+      "class": "primary",
+      "entry": false,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1392.9
+    },
+    {
+      "node": 3472,
+      "name": "Glenwood Avenue",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1886.1
+    },
+    {
+      "node": 3486,
+      "name": "Harriet Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": false,
+      "x_m": 514.6,
+      "y_m": 4111.9
+    },
+    {
+      "node": 3535,
+      "name": "Northeast Buchanan Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 4125.1,
+      "y_m": 0.0
+    },
+    {
+      "node": 3559,
+      "name": "Chicago Avenue",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 2320.4,
+      "y_m": 4111.9
+    },
+    {
+      "node": 3566,
+      "name": "1st Avenue South",
+      "class": "unclassified",
+      "entry": true,
+      "exit": false,
+      "x_m": 1219.8,
+      "y_m": 4111.9
+    },
+    {
+      "node": 3629,
+      "name": "26th Avenue South",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 4525.7,
+      "y_m": 4111.9
+    },
+    {
+      "node": 3751,
+      "name": "Mount Curve Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3281.0
+    },
+    {
+      "node": 3782,
+      "name": "Minnehaha Avenue",
+      "class": "secondary",
+      "entry": true,
+      "exit": true,
+      "x_m": 3903.5,
+      "y_m": 4111.9
+    },
+    {
+      "node": 3816,
+      "name": "11th Avenue South",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 2664.7,
+      "y_m": 4111.9
+    },
+    {
+      "node": 3840,
+      "name": "East Hennepin Avenue",
+      "class": "secondary",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 602.0
+    },
+    {
+      "node": 3842,
+      "name": "Park Avenue",
+      "class": "tertiary",
+      "entry": true,
+      "exit": false,
+      "x_m": 2119.6,
+      "y_m": 4111.9
+    },
+    {
+      "node": 3866,
+      "name": "I 35W",
+      "class": "motorway",
+      "entry": false,
+      "exit": true,
+      "x_m": 4231.9,
+      "y_m": 0.0
+    },
+    {
+      "node": 3881,
+      "name": "I 94",
+      "class": "motorway",
+      "entry": false,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 3689.4
+    },
+    {
+      "node": 3893,
+      "name": "",
+      "class": "motorway",
+      "entry": true,
+      "exit": false,
+      "x_m": 646.4,
+      "y_m": 0.0
+    },
+    {
+      "node": 3901,
+      "name": "Northeast Stinson Boulevard",
+      "class": "secondary",
+      "entry": false,
+      "exit": true,
+      "x_m": 5146.7,
+      "y_m": 0.0
+    },
+    {
+      "node": 3902,
+      "name": "Northeast Stinson Boulevard",
+      "class": "secondary",
+      "entry": true,
+      "exit": false,
+      "x_m": 5132.2,
+      "y_m": 0.0
+    },
+    {
+      "node": 3941,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 5276.4,
+      "y_m": 0.0
+    },
+    {
+      "node": 3944,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 5211.2,
+      "y_m": 0.0
+    },
+    {
+      "node": 3970,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": false,
+      "x_m": 2065.3,
+      "y_m": 0.0
+    },
+    {
+      "node": 3974,
+      "name": "",
+      "class": "service",
+      "entry": false,
+      "exit": true,
+      "x_m": 2087.8,
+      "y_m": 0.0
+    },
+    {
+      "node": 3987,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 17.8
+    },
+    {
+      "node": 3988,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 6054.4,
+      "y_m": 0.0
+    },
+    {
+      "node": 4020,
+      "name": "East River Parkway",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 4034.8
+    },
+    {
+      "node": 4041,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 2371.2
+    },
+    {
+      "node": 4047,
+      "name": "4th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 1717.0,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4164,
+      "name": "I 35W",
+      "class": "motorway",
+      "entry": false,
+      "exit": true,
+      "x_m": 1754.2,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4165,
+      "name": "MN 65",
+      "class": "motorway",
+      "entry": true,
+      "exit": false,
+      "x_m": 1778.1,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4177,
+      "name": "I 35W",
+      "class": "motorway",
+      "entry": true,
+      "exit": false,
+      "x_m": 1788.2,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4194,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 175.3
+    },
+    {
+      "node": 4202,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 4692.1,
+      "y_m": 0.0
+    },
+    {
+      "node": 4292,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 2375.3,
+      "y_m": 0.0
+    },
+    {
+      "node": 4298,
+      "name": "Olson Memorial Highway",
+      "class": "primary",
+      "entry": true,
+      "exit": false,
+      "x_m": 0.0,
+      "y_m": 1415.8
+    },
+    {
+      "node": 4304,
+      "name": "5th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 1815.5,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4399,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 1942.2
+    },
+    {
+      "node": 4409,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": false,
+      "x_m": 5201.6,
+      "y_m": 0.0
+    },
+    {
+      "node": 4419,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1763.8
+    },
+    {
+      "node": 4422,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1746.8
+    },
+    {
+      "node": 4449,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1907.9
+    },
+    {
+      "node": 4452,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1935.8
+    },
+    {
+      "node": 4453,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1946.6
+    },
+    {
+      "node": 4492,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 725.8
+    },
+    {
+      "node": 4494,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 701.9
+    },
+    {
+      "node": 4495,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 670.9
+    },
+    {
+      "node": 4514,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3683.2
+    },
+    {
+      "node": 4525,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 1239.7,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4553,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 70.9,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4562,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 1084.6,
+      "y_m": 0.0
+    },
+    {
+      "node": 4630,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 478.1
+    },
+    {
+      "node": 4648,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 929.5,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4673,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 2261.2
+    },
+    {
+      "node": 4687,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 1818.5
+    },
+    {
+      "node": 4693,
+      "name": "",
+      "class": "motorway_link",
+      "entry": true,
+      "exit": false,
+      "x_m": 3668.1,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4723,
+      "name": "Cedar Avenue South",
+      "class": "secondary",
+      "entry": false,
+      "exit": true,
+      "x_m": 3557.4,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4741,
+      "name": "Dunwoody Boulevard",
+      "class": "secondary",
+      "entry": true,
+      "exit": false,
+      "x_m": 0.0,
+      "y_m": 2776.1
+    },
+    {
+      "node": 4742,
+      "name": "University Avenue Southeast",
+      "class": "secondary",
+      "entry": false,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 2909.5
+    },
+    {
+      "node": 4755,
+      "name": "31st Avenue South",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 5132.7,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4771,
+      "name": "University Avenue Southeast",
+      "class": "secondary",
+      "entry": true,
+      "exit": false,
+      "x_m": 6073.5,
+      "y_m": 2890.6
+    },
+    {
+      "node": 4824,
+      "name": "Bryant Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 114.0,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4879,
+      "name": "Northeast Fillmore Street",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 3923.3,
+      "y_m": 0.0
+    },
+    {
+      "node": 4896,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 1459.4,
+      "y_m": 0.0
+    },
+    {
+      "node": 4961,
+      "name": "Colfax Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 13.6,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4973,
+      "name": "Aldrich Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 213.4,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4986,
+      "name": "3rd Avenue South",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 1517.8,
+      "y_m": 4111.9
+    },
+    {
+      "node": 4990,
+      "name": "Pillsbury Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 844.0,
+      "y_m": 4111.9
+    },
+    {
+      "node": 5001,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 269.9,
+      "y_m": 4111.9
+    },
+    {
+      "node": 5004,
+      "name": "Blaisdell Avenue",
+      "class": "tertiary",
+      "entry": false,
+      "exit": true,
+      "x_m": 977.1,
+      "y_m": 4111.9
+    },
+    {
+      "node": 5021,
+      "name": "30th Avenue South",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 5025.2,
+      "y_m": 4111.9
+    },
+    {
+      "node": 5050,
+      "name": "North Bryant Avenue",
+      "class": "residential",
+      "entry": true,
+      "exit": true,
+      "x_m": 74.1,
+      "y_m": 0.0
+    },
+    {
+      "node": 5051,
+      "name": "Southeast 4th Street",
+      "class": "unclassified",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 2757.5
+    },
+    {
+      "node": 5055,
+      "name": "University of Minnesota Transitway",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 2666.7
+    },
+    {
+      "node": 5124,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 6073.5,
+      "y_m": 2507.3
+    },
+    {
+      "node": 5126,
+      "name": "North 7th Street",
+      "class": "secondary",
+      "entry": false,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 728.7
+    },
+    {
+      "node": 5139,
+      "name": "West 22nd Street",
+      "class": "residential",
+      "entry": false,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 4009.8
+    },
+    {
+      "node": 5145,
+      "name": "Northeast Central Avenue",
+      "class": "primary",
+      "entry": true,
+      "exit": false,
+      "x_m": 3514.9,
+      "y_m": 0.0
+    },
+    {
+      "node": 5178,
+      "name": "Nicollet Avenue",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 1116.8,
+      "y_m": 4111.9
+    },
+    {
+      "node": 5187,
+      "name": "Northeast Johnson Street",
+      "class": "tertiary",
+      "entry": true,
+      "exit": true,
+      "x_m": 4323.0,
+      "y_m": 0.0
+    },
+    {
+      "node": 5197,
+      "name": "",
+      "class": "service",
+      "entry": true,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3972.7
+    },
+    {
+      "node": 5199,
+      "name": "Hennepin Avenue South",
+      "class": "primary",
+      "entry": false,
+      "exit": true,
+      "x_m": 0.0,
+      "y_m": 3883.6
+    },
+    {
+      "node": 5267,
+      "name": "Hennepin Avenue South",
+      "class": "primary",
+      "entry": true,
+      "exit": false,
+      "x_m": 0.0,
+      "y_m": 3903.0
+    }
+  ],
+  "bridges_m": {
+    "(unnamed)": 8517.3,
+    "10th Street North": 332.5,
+    "11th Avenue South": 197.2,
+    "11th Street North": 64.7,
+    "11th Street South": 1.9,
+    "12th Street North": 60.0,
+    "19th Avenue South": 85.4,
+    "20th Avenue South": 62.2,
+    "25th Avenue South": 56.5,
+    "3rd Avenue Bridge": 574.9,
+    "3rd Avenue South": 82.6,
+    "4th Street Southeast": 137.5,
+    "Cedar Avenue South": 49.0,
+    "Chicago Avenue": 102.0,
+    "East 15th Street": 73.3,
+    "East Franklin Avenue": 79.7,
+    "East Grant Street": 56.4,
+    "East Hennepin Avenue": 246.1,
+    "East Lyndale Avenue North": 503.8,
+    "East Lyndale Avenue South": 33.1,
+    "East River Parkway": 117.3,
+    "Glenwood Avenue": 188.8,
+    "Groveland Avenue": 94.8,
+    "Hennepin Avenue": 634.2,
+    "Hiawatha Avenue": 128.4,
+    "I 35W": 1064.3,
+    "I 394": 646.7,
+    "I 394 EXPR": 168.1,
+    "I 94": 2378.8,
+    "I 94;MN 55": 436.3,
+    "LaSalle Avenue": 71.6,
+    "Linden Avenue West": 54.7,
+    "MN 55": 1350.9,
+    "MN 65": 157.0,
+    "Merriam Street": 78.8,
+    "Nicollet Avenue": 70.0,
+    "Nicollet Street": 29.6,
+    "North 1st Street": 41.4,
+    "North 2nd Street": 50.6,
+    "North 5th Street": 242.3,
+    "North 7th Street": 559.3,
+    "North Plymouth Avenue": 337.7,
+    "North Washington Avenue": 47.5,
+    "Northeast 1st Avenue": 133.7,
+    "Northeast 2nd Street": 36.3,
+    "Northeast 5th Street": 44.9,
+    "Northeast 7th Street": 38.8,
+    "Northeast 8th Avenue": 152.6,
+    "Northeast Central Avenue": 101.4,
+    "Northeast Johnson Street": 138.2,
+    "Northeast Main Street": 35.3,
+    "Northeast University Avenue": 29.0,
+    "Olson Memorial Highway": 135.1,
+    "Park Avenue": 104.5,
+    "Portland Avenue": 113.0,
+    "Riverside Avenue": 110.1,
+    "Royalston Avenue North": 35.0,
+    "South 1st Street": 33.7,
+    "South 7th Street": 312.6,
+    "South 8th Street": 173.4,
+    "Southeast 10th Avenue": 668.8,
+    "Southeast 14th Avenue": 56.7,
+    "Southeast 15th Avenue": 74.5,
+    "Southeast 27th Avenue": 72.6,
+    "Southeast 5th Street": 84.5,
+    "Southeast 8th Street": 72.9,
+    "Southeast Franklin Avenue": 421.1,
+    "Southeast University Avenue": 131.3,
+    "Southeast Washington Avenue": 824.1,
+    "Washington Avenue South": 69.2,
+    "West Lyndale Avenue North": 163.2,
+    "West Lyndale Avenue South": 38.8
+  },
+  "psv_only_m": {
+    "(unnamed)": 3159.5,
+    "Nicollet Mall": 1391.8,
+    "Southeast Washington Avenue": 1348.4,
+    "University of Minnesota Transitway": 660.8
+  },
+  "skipped_ways": {
+    "alley": 335,
+    "not drivable": 2690,
+    "reversible": 2
+  },
+  "dropped_by_connectivity": {
+    "links": 140,
+    "km": 4.959,
+    "percent_of_length": 1.07,
+    "names": [
+      "1st Avenue South",
+      "East 16th Street",
+      "East 17th Street",
+      "I 394 EXPR",
+      "Milwaukee Avenue South",
+      "Southeast 5th Street"
+    ]
+  },
+  "warnings": [],
+  "output_bytes": 540894
+}
