@@ -31,13 +31,29 @@ Pipeline tests:
 python3 -m unittest discover -s tests -p "test_*.py"
 ```
 
+## Street map viewer
+
+`viewer.html` draws the street network: it opens with the whole area in view; drag to pan,
+scroll or pinch to zoom, tap a street for its details (speed limit, lanes, one-way, shuttle-only,
+bridge, OSM way). Until `data/mpls_graph.js` has been built it shows a small synthetic test
+network from `data/sample_graph.js`.
+
 ## Run locally
 
 ```
 python3 -m http.server 8000
 ```
 
-Open http://localhost:8000. Source-app regression suite (slow, several minutes):
+Open http://localhost:8000/viewer.html for the street map, or http://localhost:8000 for the
+imported simulation (still the original grid until Phase 3).
+
+Viewer and decoder tests:
+
+```
+node tests/viewer.test.cjs
+```
+
+Source-app regression suite (slow, several minutes):
 
 ```
 node tests/simulation.cjs

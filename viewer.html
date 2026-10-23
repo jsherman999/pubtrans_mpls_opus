@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PubTrans MPLS — street network</title>
+<style>
+  :root {
+    --bg: #eef2f5;
+    --street: #a3adb8;
+    --arterial: #4d5866;
+    --motorway: #c27a00;
+    --psv: #0f8b80;
+    --signal: #d63b3b;
+    --portal: #7c4dcc;
+    --casing: rgba(29, 39, 51, 0.55);
+    --select: #2563eb;
+    --text: #1d2733;
+    --muted: #5a6573;
+    --panel: rgba(255, 255, 255, 0.92);
+    --panel-edge: rgba(29, 39, 51, 0.14);
+    --halo: rgba(238, 242, 245, 0.9);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141c26;
+      --street: #5d6977;
+      --arterial: #cfc6b1;
+      --motorway: #e8a33d;
+      --psv: #3fb6a8;
+      --signal: #ef5b5b;
+      --portal: #b18cf2;
+      --casing: rgba(230, 233, 238, 0.5);
+      --select: #7aa7ff;
+      --text: #e6e9ee;
+      --muted: #9aa5b1;
+      --panel: rgba(24, 33, 45, 0.9);
+      --panel-edge: rgba(230, 233, 238, 0.14);
+      --halo: rgba(20, 28, 38, 0.9);
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.45 "Avenir Next", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  body { overflow: hidden; }
+  canvas#map { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
+    touch-action: none; cursor: grab; }
+  canvas#map:active { cursor: grabbing; }
+  canvas#map:focus-visible { outline: 3px solid var(--select); outline-offset: -3px; }
+
+  .card { position: fixed; background: var(--panel); border: 1px solid var(--panel-edge);
+    border-radius: 10px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  #title { top: calc(12px + env(safe-area-inset-top, 0px)); left: calc(12px + env(safe-area-inset-left, 0px));
+    max-width: min(360px, calc(100vw - 96px)); padding: 10px 14px; }
+  #title h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+  #title p { margin: 2px 0 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  #title .notice { color: var(--text); margin-top: 6px; }
+  #title code { font-size: 12px; }
+  button { font: inherit; color: var(--text); background: transparent; border: 1px solid var(--panel-edge);
+    border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
+  #keyToggle { margin-top: 8px; font-size: 13px; }
+  #key { display: none; margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; }
+  #key.open { display: grid; gap: 4px; }
+  #key li { display: flex; align-items: center; gap: 8px; }
+  #key svg { flex: none; }
+
+  #fit { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px)); background: var(--panel); padding: 8px 14px; }
+
+  #scale { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: calc(12px + env(safe-area-inset-left, 0px));
+    padding: 6px 10px 6px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #scale .bar { height: 5px; border: 1.5px solid var(--text); border-top: 0; margin-top: 3px; }
+
+  #credit { position: fixed; bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    right: calc(10px + env(safe-area-inset-right, 0px)); font-size: 11px; color: var(--muted); }
+  #credit a { color: inherit; }
+
+  #inspect { display: none; bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+    left: calc(12px + env(safe-area-inset-left, 0px)); width: min(340px, calc(100vw - 24px));
+    padding: 12px 14px; }
+  #inspect.open { display: block; }
+  #inspect h2 { margin: 0 28px 6px 0; font-size: 16px; font-weight: 650; }
+  #inspect dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 13px;
+    font-variant-numeric: tabular-nums; }
+  #inspect dt { color: var(--muted); }
+  #inspect dd { margin: 0; }
+  #inspect .close { position: absolute; top: 8px; right: 8px; padding: 2px 8px; }
+  #inspect a { color: var(--select); font-size: 13px; display: inline-block; margin-top: 8px; }
+
+  #empty { position: fixed; inset: 0; display: none; place-items: center; text-align: center; padding: 24px; }
+  #empty.open { display: grid; }
+  #empty div { max-width: 420px; }
+  @media (prefers-reduced-motion: no-preference) { #inspect.open { animation: rise 140ms ease-out; } }
+  @keyframes rise { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+</style>
+</head>
+<body>
+<canvas id="map" tabindex="0" aria-label="Street map. Drag to pan, scroll or pinch to zoom, tap a street for details."></canvas>
+
+<section id="title" class="card" aria-live="polite">
+  <h1 id="areaName">Loading streets…</h1>
+  <p id="areaStats"></p>
+  <p id="sampleNotice" class="notice" hidden>Synthetic test network, not Minneapolis. Build the real
+    streets with <code>python3 tools/build_osm.py --fetch</code>, then reload.</p>
+  <button id="keyToggle" aria-expanded="false" aria-controls="key">Show key</button>
+  <ul id="key">
+    <li><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="var(--motorway)" stroke-width="4"/></svg>Freeway and ramps</li>
+    <li><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="var(--arterial)" stroke-width="3"/></svg>Arterial street</li>
+    <li><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="var(--street)" stroke-width="2"/></svg>Local street</li>
+    <li><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="var(--psv)" stroke-width="3" stroke-dasharray="5 3"/></svg>Shuttles and buses only</li>
+    <li><svg width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="var(--casing)" stroke-width="7"/><line x1="0" y1="5" x2="28" y2="5" stroke="var(--arterial)" stroke-width="3"/></svg>Bridge</li>
+    <li><svg width="28" height="10"><circle cx="14" cy="5" r="4" fill="var(--signal)"/></svg>Traffic signal (zoom in)</li>
+    <li><svg width="28" height="10"><rect x="10" y="1" width="8" height="8" fill="var(--signal)" transform="rotate(45 14 5)"/></svg>Stop sign approach (zoom in)</li>
+    <li><svg width="28" height="10"><path d="M8 1 L20 5 L8 9 Z" fill="var(--portal)"/></svg>Road continues off the map</li>
+  </ul>
+</section>
+
+<button id="fit" aria-label="Fit the whole area in view">Fit</button>
+
+<div id="scale" class="card"><span id="scaleText"></span><div class="bar" id="scaleBar"></div></div>
+<div id="credit"></div>
+
+<section id="inspect" class="card" aria-live="polite">
+  <button class="close" id="inspectClose" aria-label="Close street details">✕</button>
+  <h2 id="inspectName"></h2>
+  <dl id="inspectList"></dl>
+  <a id="inspectOsm" target="_blank" rel="noopener"></a>
+</section>
+
+<div id="empty"><div>
+  <h1>No street data yet</h1>
+  <p>Run <code>python3 tools/build_osm.py --fetch</code> from the repository root, then reload this page.</p>
+</div></div>
+
+<script src="src/graph.js"></script>
+<script>
+"use strict";
+
+// ------------------------------------------------------------------ data loading
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+loadScript("data/mpls_graph.js")
+  .then(() => ({ sample: false }))
+  .catch(() => loadScript("data/sample_graph.js").then(() => ({ sample: true })))
+  .then(({ sample }) => start(MplsGraph.decodeMplsGraph(window.MPLS_GRAPH), sample))
+  .catch((err) => {
+    console.error(err);
+    document.getElementById("areaName").textContent = "No street data";
+    document.getElementById("empty").classList.add("open");
+  });
+
+// ------------------------------------------------------------------ styling
+const CLASS_STYLE = {
+  // width in meters at full zoom, minimum width in pixels, colour token, draw layer, min zoom (px per m)
+  service:        { w: 4.5, min: 0.5, color: "street",   layer: 0, minZoom: 0.35 },
+  living_street:  { w: 6,   min: 0.6, color: "street",   layer: 1, minZoom: 0 },
+  residential:    { w: 7,   min: 0.7, color: "street",   layer: 1, minZoom: 0 },
+  unclassified:   { w: 7,   min: 0.7, color: "street",   layer: 1, minZoom: 0 },
+  tertiary_link:  { w: 6,   min: 0.8, color: "arterial", layer: 2, minZoom: 0 },
+  tertiary:       { w: 9,   min: 0.9, color: "arterial", layer: 2, minZoom: 0 },
+  secondary_link: { w: 6,   min: 0.9, color: "arterial", layer: 3, minZoom: 0 },
+  secondary:      { w: 10,  min: 1.1, color: "arterial", layer: 3, minZoom: 0 },
+  primary_link:   { w: 6,   min: 1.0, color: "arterial", layer: 4, minZoom: 0 },
+  primary:        { w: 11,  min: 1.3, color: "arterial", layer: 4, minZoom: 0 },
+  trunk_link:     { w: 6,   min: 1.0, color: "motorway", layer: 5, minZoom: 0 },
+  trunk:          { w: 13,  min: 1.5, color: "motorway", layer: 5, minZoom: 0 },
+  motorway_link:  { w: 6,   min: 1.0, color: "motorway", layer: 5, minZoom: 0 },
+  motorway:       { w: 16,  min: 1.8, color: "motorway", layer: 6, minZoom: 0 },
+  busway:         { w: 8,   min: 1.2, color: "psv",      layer: 7, minZoom: 0 },
+};
+const FRIENDLY_CLASS = {
+  motorway: "Freeway", motorway_link: "Freeway ramp", trunk: "Expressway", trunk_link: "Expressway ramp",
+  primary: "Primary arterial", primary_link: "Arterial ramp", secondary: "Secondary arterial",
+  secondary_link: "Arterial ramp", tertiary: "Collector street", tertiary_link: "Collector ramp",
+  unclassified: "Local street", residential: "Residential street", living_street: "Shared street",
+  service: "Service road", busway: "Transitway",
+};
+const DETAIL_ZOOM = 1.2;   // px per meter: arrows, signals, stops
+const LABEL_ZOOM = 0.9;
+const MAX_ZOOM = 24;
+
+let theme = {};
+function readTheme() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ["bg", "street", "arterial", "motorway", "psv", "signal", "portal", "casing", "select", "text", "halo"])
+    theme[k] = cs.getPropertyValue("--" + k).trim();
+}
+
+// ------------------------------------------------------------------ app
+function start(graph, sample) {
+  const canvas = document.getElementById("map");
+  const ctx = canvas.getContext("2d");
+  const index = MplsGraph.buildLinkIndex(graph, 100);
+  readTheme();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readTheme(); requestDraw(); });
+
+  // Header text
+  const km = graph.links.reduce((s, l) => s + l.len, 0) / 1000;
+  const intersections = graph.nodes.count;
+  document.getElementById("areaName").textContent = graph.label || "Street network";
+  document.getElementById("areaStats").textContent =
+    `${intersections.toLocaleString()} intersections and ${Math.round(km).toLocaleString()} km (${Math.round(km * 0.621371).toLocaleString()} mi) of drivable street`;
+  document.getElementById("sampleNotice").hidden = !sample;
+  document.getElementById("credit").innerHTML =
+    'Street data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+  document.title = `${graph.label || "Street network"} — PubTrans MPLS`;
+
+  // Links grouped by draw layer
+  const layers = [];
+  for (const l of graph.links) {
+    const st = CLASS_STYLE[l.className] || CLASS_STYLE.residential;
+    l.style = st;
+    const layer = l.psvOnly ? 7 : st.layer;
+    (layers[layer] = layers[layer] || []).push(l);
+  }
+  const bridges = graph.links.filter((l) => l.flags & MplsGraph.FLAG_BRIDGE);
+  const portals = [];
+  for (let i = 0; i < graph.nodes.count; i++) if (graph.nodes.flags[i] & MplsGraph.NODE_PORTAL) portals.push(i);
+  const signalNodes = [];
+  for (let i = 0; i < graph.nodes.count; i++) if (graph.nodes.flags[i] & MplsGraph.NODE_SIGNAL) signalNodes.push(i);
+
+  // ---------------------------------------------------------------- view transform
+  const view = { scale: 1, ox: 0, oy: 0, fitScale: 1, userMoved: false };
+  let cssW = 0, cssH = 0, dpr = 1;
+  let selected = null;
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (w === cssW && h === cssH && canvas.width === Math.round(w * dpr)) return;
+    const cx = (cssW / 2 - view.ox) / view.scale, cy = (cssH / 2 - view.oy) / view.scale;
+    cssW = w; cssH = h;
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    view.fitScale = fitScale();
+    if (!view.userMoved) fit();
+    else { view.ox = cssW / 2 - cx * view.scale; view.oy = cssH / 2 - cy * view.scale; }
+    requestDraw();
+  }
+  function fitScale() {
+    const pad = Math.min(48, Math.min(cssW, cssH) * 0.06);
+    return Math.min((cssW - 2 * pad) / graph.width, (cssH - 2 * pad) / graph.height);
+  }
+  function fit() {
+    view.scale = view.fitScale = fitScale();
+    view.ox = (cssW - graph.width * view.scale) / 2;
+    view.oy = (cssH - graph.height * view.scale) / 2;
+    view.userMoved = false;
+    requestDraw();
+  }
+  function zoomAt(factor, sx, sy) {
+    const next = Math.min(MAX_ZOOM, Math.max(view.fitScale * 0.5, view.scale * factor));
+    const k = next / view.scale;
+    view.ox = sx - (sx - view.ox) * k;
+    view.oy = sy - (sy - view.oy) * k;
+    view.scale = next;
+    view.userMoved = true;
+    requestDraw();
+  }
+  function pan(dx, dy) { view.ox += dx; view.oy += dy; view.userMoved = true; requestDraw(); }
+  const toWorld = (sx, sy) => [(sx - view.ox) / view.scale, (sy - view.oy) / view.scale];
+
+  // ---------------------------------------------------------------- drawing
+  let drawQueued = false;
+  function requestDraw() {
+    if (drawQueued) return;
+    drawQueued = true;
+    requestAnimationFrame(() => { drawQueued = false; draw(); });
+  }
+
+  function tracePath(l) {
+    const p = l.pts, s = view.scale, ox = view.ox, oy = view.oy;
+    ctx.moveTo(p[0] * s + ox, p[1] * s + oy);
+    for (let k = 2; k < p.length; k += 2) ctx.lineTo(p[k] * s + ox, p[k + 1] * s + oy);
+  }
+  function visible(l, x0, y0, x1, y1) {
+    const b = l.bbox;
+    return b[2] >= x0 && b[0] <= x1 && b[3] >= y0 && b[1] <= y1;
+  }
+  function widthFor(st) { return Math.max(st.min, st.w * view.scale * 0.8); }
+
+  function draw() {
+    resize();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = theme.bg;
+    ctx.fillRect(0, 0, cssW, cssH);
+    const margin = 40 / view.scale;
+    const [x0, y0] = toWorld(0, 0), [x1, y1] = toWorld(cssW, cssH);
+    const vx0 = x0 - margin, vy0 = y0 - margin, vx1 = x1 + margin, vy1 = y1 + margin;
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+    // Study-area outline
+    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = theme.casing; ctx.lineWidth = 1;
+    ctx.strokeRect(view.ox, view.oy, graph.width * view.scale, graph.height * view.scale);
+    ctx.setLineDash([]);
+
+    // Bridge casings
+    for (const l of bridges) {
+      if (!visible(l, vx0, vy0, vx1, vy1) || view.scale < l.style.minZoom) continue;
+      ctx.beginPath(); tracePath(l);
+      ctx.strokeStyle = theme.casing; ctx.lineWidth = widthFor(l.style) + Math.max(2, 3 * view.scale);
+      ctx.stroke();
+    }
+
+    // Roads by layer, one path per (layer, colour, width)
+    for (let li = 0; li < layers.length; li++) {
+      const list = layers[li];
+      if (!list) continue;
+      const batches = new Map();
+      for (const l of list) {
+        if (view.scale < l.style.minZoom || !visible(l, vx0, vy0, vx1, vy1)) continue;
+        const color = l.psvOnly ? "psv" : l.style.color;
+        const w = widthFor(l.style);
+        const key = color + "|" + w.toFixed(2);
+        if (!batches.has(key)) batches.set(key, { color, w, links: [] });
+        batches.get(key).links.push(l);
+      }
+      for (const b of batches.values()) {
+        ctx.beginPath();
+        for (const l of b.links) tracePath(l);
+        ctx.strokeStyle = theme[b.color]; ctx.lineWidth = b.w;
+        if (li === 7) ctx.setLineDash([Math.max(4, b.w * 2), Math.max(3, b.w * 1.2)]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    if (view.scale >= DETAIL_ZOOM) drawDetail(vx0, vy0, vx1, vy1);
+    if (view.scale >= LABEL_ZOOM) drawLabels(vx0, vy0, vx1, vy1);
+    drawPortals();
+    if (selected) drawSelected(selected);
+    updateScaleBar();
+  }
+
+  function drawDetail(vx0, vy0, vx1, vy1) {
+    const s = view.scale;
+    // One-way arrows
+    ctx.fillStyle = theme.bg;
+    ctx.beginPath();
+    for (const l of graph.links) {
+      if (!l.oneWay || !visible(l, vx0, vy0, vx1, vy1) || l.len * s < 60) continue;
+      const fwd = !!(l.dir & (MplsGraph.DIR_AB | MplsGraph.DIR_AB_PSV));
+      const step = 160 / s;   // one arrow every 160 px of street
+      for (let d = Math.min(l.len / 2, step / 2); d < l.len - 5 / s; d += step) {
+        const p = MplsGraph.pointAlong(l, d, fwd), q = MplsGraph.pointAlong(l, d + 1, fwd);
+        const ang = Math.atan2(q[1] - p[1], q[0] - p[0]);
+        const size = Math.min(7, Math.max(3, widthFor(l.style) * 0.45));
+        const cx = p[0] * s + view.ox, cy = p[1] * s + view.oy;
+        const ca = Math.cos(ang), sa = Math.sin(ang);
+        ctx.moveTo(cx + ca * size, cy + sa * size);
+        ctx.lineTo(cx - ca * size - sa * size * 0.7, cy - sa * size + ca * size * 0.7);
+        ctx.lineTo(cx - ca * size + sa * size * 0.7, cy - sa * size - ca * size * 0.7);
+        ctx.closePath();
+      }
+    }
+    ctx.fill();
+
+    // Stop sign approaches: a small diamond a few meters before the stop line
+    ctx.fillStyle = theme.signal;
+    ctx.beginPath();
+    for (const l of graph.links) {
+      if (!(l.flags & (MplsGraph.FLAG_STOP_AT_A | MplsGraph.FLAG_STOP_AT_B)) || !visible(l, vx0, vy0, vx1, vy1)) continue;
+      for (const atB of [true, false]) {
+        if (!(l.flags & (atB ? MplsGraph.FLAG_STOP_AT_B : MplsGraph.FLAG_STOP_AT_A))) continue;
+        const back = Math.min(l.len * 0.4, 8);
+        const p = MplsGraph.pointAlong(l, l.len - back, atB);
+        const cx = p[0] * s + view.ox, cy = p[1] * s + view.oy, r = 3.5;
+        ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r, cy); ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r, cy); ctx.closePath();
+      }
+    }
+    ctx.fill();
+
+    // Signals
+    ctx.beginPath();
+    for (const i of signalNodes) {
+      const x = graph.nodes.x[i], y = graph.nodes.y[i];
+      if (x < vx0 || x > vx1 || y < vy0 || y > vy1) continue;
+      const cx = x * s + view.ox, cy = y * s + view.oy;
+      ctx.moveTo(cx + 4, cy); ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    }
+    ctx.fillStyle = theme.signal; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = theme.bg; ctx.stroke();
+  }
+
+  function drawLabels(vx0, vy0, vx1, vy1) {
+    const s = view.scale;
+    const size = Math.round(Math.min(15, 10 + (s - LABEL_ZOOM) * 2));
+    ctx.font = `600 ${size}px "Avenir Next", "Segoe UI", system-ui, sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineWidth = 3; ctx.strokeStyle = theme.halo; ctx.fillStyle = theme.text;
+    const occupied = new Set();
+    const cell = 28;
+    const placedByName = new Map();
+    const candidates = graph.links
+      .filter((l) => l.name && visible(l, vx0, vy0, vx1, vy1) && s >= l.style.minZoom)
+      .sort((a, b) => b.style.layer - a.style.layer || b.len - a.len);
+    for (const l of candidates) {
+      // Longest on-screen piece of any straight segment of this link
+      const p = l.pts;
+      let bestLen = 0, mx = 0, my = 0, ang = 0;
+      for (let k = 0; k + 3 < p.length; k += 2) {
+        const ax = p[k] * s + view.ox, ay = p[k + 1] * s + view.oy;
+        const bx = p[k + 2] * s + view.ox, by = p[k + 3] * s + view.oy;
+        const clip = clipToScreen(ax, ay, bx, by, 8);
+        if (!clip) continue;
+        const [t0, t1] = clip;
+        const len = Math.hypot(bx - ax, by - ay) * (t1 - t0);
+        if (len > bestLen) {
+          const tm = (t0 + t1) / 2;
+          bestLen = len; mx = ax + (bx - ax) * tm; my = ay + (by - ay) * tm;
+          ang = Math.atan2(by - ay, bx - ax);
+        }
+      }
+      const text = l.name;
+      const tw = ctx.measureText(text).width;
+      if (bestLen < tw + 16) continue;
+      const prior = placedByName.get(text) || [];
+      if (prior.some(([px, py]) => Math.hypot(px - mx, py - my) < 260)) continue;
+      if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
+      // Coarse collision test along the label's axis
+      const cells = [];
+      const steps = Math.ceil(tw / cell) + 1;
+      for (let i = 0; i <= steps; i++) {
+        const t = (i / steps - 0.5) * tw;
+        cells.push(Math.floor((mx + Math.cos(ang) * t) / cell) + "," + Math.floor((my + Math.sin(ang) * t) / cell));
+      }
+      if (cells.some((c) => occupied.has(c))) continue;
+      cells.forEach((c) => occupied.add(c));
+      prior.push([mx, my]); placedByName.set(text, prior);
+      ctx.save(); ctx.translate(mx, my); ctx.rotate(ang);
+      ctx.strokeText(text, 0, 0); ctx.fillText(text, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // Parametric range [t0, t1] of segment a->b inside the screen (inset by pad), or null.
+  function clipToScreen(ax, ay, bx, by, pad) {
+    const dx = bx - ax, dy = by - ay;
+    let t0 = 0, t1 = 1;
+    for (const [pk, qk] of [[-dx, ax - pad], [dx, cssW - pad - ax], [-dy, ay - pad], [dy, cssH - pad - ay]]) {
+      if (pk === 0) { if (qk < 0) return null; continue; }
+      const r = qk / pk;
+      if (pk < 0) { if (r > t1) return null; if (r > t0) t0 = r; }
+      else { if (r < t0) return null; if (r < t1) t1 = r; }
+    }
+    return t1 > t0 ? [t0, t1] : null;
+  }
+
+  function drawPortals() {
+    const s = view.scale;
+    ctx.fillStyle = theme.portal;
+    ctx.beginPath();
+    for (const i of portals) {
+      const x = graph.nodes.x[i] * s + view.ox, y = graph.nodes.y[i] * s + view.oy;
+      if (x < -10 || y < -10 || x > cssW + 10 || y > cssH + 10) continue;
+      // Point outward from the nearest edge of the area
+      const w = graph.width, h = graph.height, gx = graph.nodes.x[i], gy = graph.nodes.y[i];
+      const d = [gx, w - gx, gy, h - gy];
+      const m = d.indexOf(Math.min(...d));
+      const ang = [Math.PI, 0, -Math.PI / 2, Math.PI / 2][m];
+      const r = 6, ca = Math.cos(ang), sa = Math.sin(ang);
+      ctx.moveTo(x + ca * r, y + sa * r);
+      ctx.lineTo(x - ca * r * 0.6 - sa * r * 0.7, y - sa * r * 0.6 + ca * r * 0.7);
+      ctx.lineTo(x - ca * r * 0.6 + sa * r * 0.7, y - sa * r * 0.6 - ca * r * 0.7);
+      ctx.closePath();
+    }
+    ctx.fill();
+  }
+
+  function drawSelected(l) {
+    ctx.beginPath(); tracePath(l);
+    ctx.strokeStyle = theme.select; ctx.globalAlpha = 0.25;
+    ctx.lineWidth = widthFor(l.style) + 10; ctx.stroke();
+    ctx.globalAlpha = 1; ctx.lineWidth = Math.max(2, widthFor(l.style)); ctx.stroke();
+  }
+
+  // ---------------------------------------------------------------- scale bar
+  const NICE_FT = [50, 100, 200, 300, 500, 1000, 2000, 2640, 5280, 10560, 26400];
+  function updateScaleBar() {
+    const metersPer100px = 100 / view.scale;
+    const ft = metersPer100px * 3.28084;
+    let pick = NICE_FT[0];
+    for (const n of NICE_FT) if (n <= ft) pick = n;
+    const px = (pick / 3.28084) * view.scale;
+    const label = pick >= 2640 ? `${pick / 5280} mi` : `${pick} ft`;
+    document.getElementById("scaleText").textContent = `${label} (${Math.round(pick / 3.28084).toLocaleString()} m)`;
+    document.getElementById("scaleBar").style.width = `${Math.round(px)}px`;
+  }
+
+  // ---------------------------------------------------------------- inspection
+  function describe(l) {
+    const rows = [];
+    const mph = Math.round(l.kph / 1.609344);
+    rows.push(["Type", FRIENDLY_CLASS[l.className] || l.className]);
+    rows.push(["Speed limit", `${mph} mph (${Math.round(l.kph)} km/h)`]);
+    const ab = l.dir & (MplsGraph.DIR_AB | MplsGraph.DIR_AB_PSV), ba = l.dir & (MplsGraph.DIR_BA | MplsGraph.DIR_BA_PSV);
+    if (l.psvOnly) rows.push(["Access", "Shuttles and buses only"]);
+    if (ab && ba) {
+      rows.push(["Direction", "Two-way"]);
+      rows.push(["Lanes", l.lanesAB === l.lanesBA ? `${l.lanesAB} each way` : `${l.lanesAB} one way, ${l.lanesBA} the other`]);
+      if (!l.psvOnly && (l.psvOnlyAB || l.psvOnlyBA)) rows.push(["Contraflow", "Shuttles and buses only"]);
+    } else {
+      rows.push(["Direction", "One-way"]);
+      rows.push(["Lanes", String(ab ? l.lanesAB : l.lanesBA)]);
+    }
+    if (l.flags & MplsGraph.FLAG_BRIDGE) rows.push(["Structure", "Bridge"]);
+    if (l.flags & MplsGraph.FLAG_TUNNEL) rows.push(["Structure", "Tunnel"]);
+    const signals = [l.sigA, l.sigB].filter((v) => v === 0 || v === 1).length;
+    if (signals) rows.push(["Signals", signals === 2 ? "At both ends" : "At one end"]);
+    if (l.flags & (MplsGraph.FLAG_STOP_AT_A | MplsGraph.FLAG_STOP_AT_B)) rows.push(["Stop sign", "Yes"]);
+    rows.push(["Length", `${Math.round(l.len * 3.28084).toLocaleString()} ft (${Math.round(l.len).toLocaleString()} m)`]);
+    return rows;
+  }
+  function select(l) {
+    selected = l;
+    const panel = document.getElementById("inspect");
+    if (!l) { panel.classList.remove("open"); requestDraw(); return; }
+    document.getElementById("inspectName").textContent = l.name || `Unnamed ${(FRIENDLY_CLASS[l.className] || "street").toLowerCase()}`;
+    const dl = document.getElementById("inspectList");
+    dl.replaceChildren();
+    for (const [k, v] of describe(l)) {
+      const dt = document.createElement("dt"); dt.textContent = k;
+      const dd = document.createElement("dd"); dd.textContent = v;
+      dl.append(dt, dd);
+    }
+    const a = document.getElementById("inspectOsm");
+    a.href = `https://www.openstreetmap.org/way/${l.way}`;
+    a.textContent = `View way ${l.way} on OpenStreetMap`;
+    panel.classList.add("open");
+    requestDraw();
+  }
+  document.getElementById("inspectClose").addEventListener("click", () => select(null));
+
+  // ---------------------------------------------------------------- input
+  const pointers = new Map();
+  let tap = null, pinch = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+    tap = pointers.size === 1 ? { x: e.offsetX, y: e.offsetY, t: performance.now() } : null;
+    if (pointers.size === 2) pinch = pinchState();
+  });
+  function pinchState() {
+    const [a, b] = [...pointers.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  }
+  canvas.addEventListener("pointermove", (e) => {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    const dx = e.offsetX - p.x, dy = e.offsetY - p.y;
+    p.x = e.offsetX; p.y = e.offsetY;
+    if (tap && Math.hypot(e.offsetX - tap.x, e.offsetY - tap.y) > 6) tap = null;
+    if (pointers.size === 1) pan(dx, dy);
+    else if (pointers.size === 2 && pinch) {
+      const now = pinchState();
+      if (pinch.d > 0) zoomAt(now.d / pinch.d, now.mx, now.my);
+      pan(now.mx - pinch.mx, now.my - pinch.my);
+      pinch = now;
+    }
+  });
+  function endPointer(e) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = null;
+    if (tap && pointers.size === 0 && performance.now() - tap.t < 500) {
+      const [wx, wy] = toWorld(e.offsetX, e.offsetY);
+      select(index.nearest(wx, wy, 14 / view.scale));
+    }
+    tap = null;
+  }
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", (e) => { tap = null; endPointer(e); });
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1;
+    zoomAt(Math.exp(-e.deltaY * unit * 0.0015), e.offsetX, e.offsetY);
+  }, { passive: false });
+  canvas.addEventListener("dblclick", (e) => zoomAt(2, e.offsetX, e.offsetY));
+  canvas.addEventListener("keydown", (e) => {
+    const step = 80;
+    const actions = {
+      "+": () => zoomAt(1.4, cssW / 2, cssH / 2), "=": () => zoomAt(1.4, cssW / 2, cssH / 2),
+      "-": () => zoomAt(1 / 1.4, cssW / 2, cssH / 2), "0": fit, "f": fit,
+      ArrowLeft: () => pan(step, 0), ArrowRight: () => pan(-step, 0),
+      ArrowUp: () => pan(0, step), ArrowDown: () => pan(0, -step), Escape: () => select(null),
+    };
+    if (actions[e.key]) { e.preventDefault(); actions[e.key](); }
+  });
+  document.getElementById("fit").addEventListener("click", fit);
+  const keyToggle = document.getElementById("keyToggle");
+  keyToggle.addEventListener("click", () => {
+    const open = document.getElementById("key").classList.toggle("open");
+    keyToggle.setAttribute("aria-expanded", String(open));
+    keyToggle.textContent = open ? "Hide key" : "Show key";
+  });
+  window.addEventListener("resize", requestDraw);
+
+  resize();
+  fit();
+  // Exposed for debugging and for tests.
+  window.mplsViewer = { graph, view, fit, zoomAt, pan, select, toWorld };
+}
+</script>
+</body>
+</html>

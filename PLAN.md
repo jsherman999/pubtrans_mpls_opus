@@ -62,7 +62,7 @@ The box is a parameter of `tools/build_osm.py` and can be widened later without 
 - Exit: real build run; report shows every expected Mississippi road bridge in the box, the
   downtown one-way pairs, Nicollet Mall as psv-only, and < 2 % of link length dropped by SCC pruning.
 
-### Phase 2 — Street map view (`viewer.html`)
+### Phase 2 — Street map view (`viewer.html`) ✅ code
 - Standalone viewer that loads `data/mpls_graph.js`: fits the whole area on load and on resize
   until the user moves the map; wheel/pinch zoom around the pointer; drag to pan; Fit button.
 - Level of detail: service roads/alleys hidden when zoomed out; names, signals, stops, one-way
@@ -153,4 +153,5 @@ The box is a parameter of `tools/build_osm.py` and can be widened later without 
 |---|---|---|
 | 0 | done | Source imported unchanged at `60774088`. |
 | 1 | code done | Pipeline + fixture tests pass. Needs one real run with network access to Overpass. |
-| 2–9 | not started | |
+| 2 | code done | `viewer.html` renders whatever `data/mpls_graph.js` contains; currently the fixture sample. |
+| 3–9 | not started | |
