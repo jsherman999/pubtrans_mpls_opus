@@ -71,6 +71,19 @@
   #fit { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px));
     right: calc(12px + env(safe-area-inset-right, 0px)); background: var(--panel); padding: 8px 14px; }
 
+  #routeToggle { position: fixed; top: calc(56px + env(safe-area-inset-top, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px)); background: var(--panel); padding: 8px 14px; }
+  #routeToggle[aria-pressed="true"] { border-color: var(--select); color: var(--select); }
+  #routePanel { display: none; bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+    left: calc(12px + env(safe-area-inset-left, 0px)); width: min(340px, calc(100vw - 24px));
+    padding: 12px 14px; font-size: 13px; }
+  #routePanel.open { display: block; }
+  #routePanel h2 { margin: 0 0 6px; font-size: 16px; font-weight: 650; }
+  #routePanel p { margin: 4px 0 0; color: var(--muted); }
+  #routeResults { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 4px;
+    font-variant-numeric: tabular-nums; }
+  #routeResults li { display: flex; align-items: center; gap: 8px; }
+  #routeResults .swatch { flex: none; width: 18px; height: 4px; border-radius: 2px; }
   #scale { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: calc(12px + env(safe-area-inset-left, 0px));
     padding: 6px 10px 6px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
   #scale .bar { height: 5px; border: 1.5px solid var(--text); border-top: 0; margin-top: 3px; }
@@ -120,6 +133,12 @@
 </section>
 
 <button id="fit" aria-label="Fit the whole area in view">Fit</button>
+<button id="routeToggle" aria-pressed="false">Plan a route</button>
+<section id="routePanel" class="card" aria-live="polite">
+  <h2 id="routeTitle">Plan a route</h2>
+  <ul id="routeResults"></ul>
+  <p id="routeHint">Tap where the trip starts.</p>
+</section>
 
 <div id="scale" class="card"><span id="scaleText"></span><div class="bar" id="scaleBar"></div></div>
 <div id="credit"></div>
@@ -137,6 +156,7 @@
 </div></div>
 
 <script src="src/graph.js"></script>
+<script src="src/routing.js"></script>
 <script>
 "use strict";
 
@@ -201,6 +221,7 @@ function start(graph, sample) {
   const canvas = document.getElementById("map");
   const ctx = canvas.getContext("2d");
   const index = MplsGraph.buildLinkIndex(graph, 100);
+  const router = MplsRouting.createRouter(graph);
   readTheme();
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readTheme(); requestDraw(); });
 
@@ -339,6 +360,7 @@ function start(graph, sample) {
     if (view.scale >= LABEL_ZOOM) drawLabels(vx0, vy0, vx1, vy1);
     drawPortals();
     if (selected) drawSelected(selected);
+    drawTrip();
     updateScaleBar();
   }
 
@@ -541,6 +563,81 @@ function start(graph, sample) {
   }
   document.getElementById("inspectClose").addEventListener("click", () => select(null));
 
+  // ---------------------------------------------------------------- route preview
+  // Tap a start and an end; draws the fastest private-car route and the fastest shuttle route
+  // (shuttles may also use transit-only streets and contraflow lanes).
+  const trip = { on: false, from: -1, to: -1, car: null, shuttle: null };
+  const notPortal = (v) => !(graph.nodes.flags[v] & MplsGraph.NODE_PORTAL);
+  const fmtMin = (s) => (s < 90 ? `${Math.round(s)} s` : `${(s / 60).toFixed(1)} min`);
+  const fmtDist = (m) => `${(m / 1609.344).toFixed(2)} mi (${(m / 1000).toFixed(2)} km)`;
+
+  function setTripMode(on) {
+    trip.on = on; trip.from = trip.to = -1; trip.car = trip.shuttle = null;
+    const btn = document.getElementById("routeToggle");
+    btn.setAttribute("aria-pressed", String(on));
+    btn.textContent = on ? "Done" : "Plan a route";
+    if (on) select(null);
+    const panel = document.getElementById("routePanel");
+    if (on) panel.classList.add("open"); else panel.classList.remove("open");
+    renderTrip();
+    requestDraw();
+  }
+  function tripTap(wx, wy) {
+    const v = router.nearestNode(wx, wy, notPortal);
+    if (v < 0) return;
+    if (trip.from < 0 || trip.to >= 0) { trip.from = v; trip.to = -1; trip.car = trip.shuttle = null; }
+    else {
+      trip.to = v;
+      trip.car = router.route(trip.from, v, { mode: MplsRouting.MODE_GENERAL });
+      trip.shuttle = router.route(trip.from, v, { mode: MplsRouting.MODE_PSV });
+    }
+    renderTrip();
+    requestDraw();
+  }
+  function renderTrip() {
+    const list = document.getElementById("routeResults");
+    const hint = document.getElementById("routeHint");
+    list.replaceChildren();
+    if (trip.from < 0) { hint.textContent = "Tap where the trip starts."; return; }
+    if (trip.to < 0) { hint.textContent = "Tap where the trip ends."; return; }
+    const row = (color, label, r) => {
+      const li = document.createElement("li");
+      const sw = document.createElement("span");
+      sw.className = "swatch"; sw.style.background = `var(--${color})`;
+      const tx = document.createElement("span");
+      tx.textContent = r ? `${label}: ${fmtMin(r.time)}, ${fmtDist(r.length)}` : `${label}: no legal route`;
+      li.append(sw, tx);
+      list.append(li);
+    };
+    row("select", "Private car", trip.car);
+    row("psv", "Shuttle", trip.shuttle);
+    const usesTransit = trip.shuttle && trip.shuttle.arcs.some((i) => router.arcs[i].psvOnly);
+    hint.textContent = (usesTransit ? "The shuttle uses transit-only streets. " : "") +
+      "Times are free-flow with typical signal and stop-sign waits. Tap again to start a new trip.";
+  }
+  function strokeRoute(r, color, width) {
+    const p = router.routePoints(r), s = view.scale;
+    ctx.beginPath();
+    ctx.moveTo(p[0] * s + view.ox, p[1] * s + view.oy);
+    for (let k = 2; k < p.length; k += 2) ctx.lineTo(p[k] * s + view.ox, p[k + 1] * s + view.oy);
+    ctx.strokeStyle = theme.halo; ctx.lineWidth = width + 4; ctx.stroke();
+    ctx.strokeStyle = theme[color]; ctx.lineWidth = width; ctx.stroke();
+  }
+  function drawTrip() {
+    if (!trip.on) return;
+    const w = Math.max(3, Math.min(10, 6 * view.scale));
+    if (trip.car && trip.car.arcs.length) strokeRoute(trip.car, "select", w + 3);
+    if (trip.shuttle && trip.shuttle.arcs.length) strokeRoute(trip.shuttle, "psv", w);
+    for (const [v, fill] of [[trip.from, "text"], [trip.to, "signal"]]) {
+      if (v < 0) continue;
+      const x = graph.nodes.x[v] * view.scale + view.ox, y = graph.nodes.y[v] * view.scale + view.oy;
+      ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2);
+      ctx.fillStyle = theme[fill]; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = theme.halo; ctx.stroke();
+    }
+  }
+  document.getElementById("routeToggle").addEventListener("click", () => setTripMode(!trip.on));
+
   // ---------------------------------------------------------------- input
   const pointers = new Map();
   let tap = null, pinch = null;
@@ -574,7 +671,8 @@ function start(graph, sample) {
     if (pointers.size < 2) pinch = null;
     if (tap && pointers.size === 0 && performance.now() - tap.t < 500) {
       const [wx, wy] = toWorld(e.offsetX, e.offsetY);
-      select(index.nearest(wx, wy, 14 / view.scale));
+      if (trip.on) tripTap(wx, wy);
+      else select(index.nearest(wx, wy, 14 / view.scale));
     }
     tap = null;
   }
@@ -592,7 +690,8 @@ function start(graph, sample) {
       "+": () => zoomAt(1.4, cssW / 2, cssH / 2), "=": () => zoomAt(1.4, cssW / 2, cssH / 2),
       "-": () => zoomAt(1 / 1.4, cssW / 2, cssH / 2), "0": fit, "f": fit,
       ArrowLeft: () => pan(step, 0), ArrowRight: () => pan(-step, 0),
-      ArrowUp: () => pan(0, step), ArrowDown: () => pan(0, -step), Escape: () => select(null),
+      ArrowUp: () => pan(0, step), ArrowDown: () => pan(0, -step),
+      Escape: () => (trip.on ? setTripMode(false) : select(null)),
     };
     if (actions[e.key]) { e.preventDefault(); actions[e.key](); }
   });
@@ -608,7 +707,7 @@ function start(graph, sample) {
   resize();
   fit();
   // Exposed for debugging and for tests.
-  window.mplsViewer = { graph, view, fit, zoomAt, pan, select, toWorld };
+  window.mplsViewer = { graph, view, fit, zoomAt, pan, select, toWorld, router, trip, setTripMode, tripTap };
 }
 </script>
 </body>

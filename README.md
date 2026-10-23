@@ -47,10 +47,14 @@ python3 -m http.server 8000
 Open http://localhost:8000/viewer.html for the street map, or http://localhost:8000 for the
 imported simulation (still the original grid until Phase 3).
 
-Viewer and decoder tests:
+Tap **Plan a route**, then a start and an end, to compare the fastest private-car route with the
+fastest shuttle route (shuttles may also use transit-only streets and contraflow lanes).
+
+Viewer, decoder and routing tests (the routing test also benchmarks a 7,000-node synthetic grid):
 
 ```
 node tests/viewer.test.cjs
+node tests/routing.test.cjs
 ```
 
 Source-app regression suite (slow, several minutes):

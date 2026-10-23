@@ -73,17 +73,48 @@ The box is a parameter of `tools/build_osm.py` and can be widened later without 
   This canvas/transform code becomes the sim's map layer in Phase 3.
 
 ### Phase 3 — Engine port onto the real graph
+Split into four steps so each lands green on its own.
+
+**3a — Routing core (`src/routing.js`) ✅**
+- Directed arcs flattened into compressed arrays; costs are seconds (length at posted speed plus
+  an expected wait at signal approaches and stop signs).
+- Binary-heap A* (straight-line distance at the network's top speed; exact, never overestimates)
+  with plain Dijkstra available for checks. Modes: private car vs shuttle/bus (`psvOnly` links).
+- Bans (Set or per-arc array), per-arc extra cost (congestion; `Infinity` closes an arc),
+  no U-turns through portals unless asked.
+- `kShortest`: the source app's ban-one-arc approach over a bounded sample of the best route's
+  arcs, keeping alternatives that share < 80 % of their length with ones already chosen.
+- LRU route cache with `invalidate()`; `routePoints` for drawing; grid-indexed `nearestNode`.
+- `viewer.html` gains **Plan a route**: tap a start and an end to see the private-car and shuttle
+  routes with times and distances.
+- Tests: `node tests/routing.test.cjs` — A* equals Dijkstra on every pair of the fixture in both
+  modes, legality (one-ways, contraflow, transit mall, portals), bans/closures, alternatives,
+  cache, nearest node; benchmark on a seeded 7,000-node synthetic grid the size of the study area.
+- Result: 0.46 ms per route on desktop Node (1,716 nodes settled vs 3,426 for Dijkstra); three
+  alternatives 7 ms. Leaves headroom under the 3 ms phone budget.
+
+**3b — Signal timing (`src/traffic.js`) ✅**
+- Controllers alternate their two phase groups with the source app's timing (30 s green, 3 s
+  transition), with deterministic per-controller offsets; `signalWait`, `canEnter`,
+  `controlDelay` (stop signs hold 3 s). Cluster-internal links never stop.
+- Tests (in `tests/routing.test.cjs`): no two conflicting greens, each group green 30 s per cycle,
+  waits bounded, internal links never wait, stop-sign holds.
+
+**3c — Vehicle motion on real links (`src/motion.js`)**
+- Vehicle state on an arc: `(arc, s)` with positions from `pointAlong`; time-based movement at the
+  link speed carried across short links, as in the source's `stepCars`.
+- Per-direction lane occupancy replaces `edgeKey(a,b)` claims; car following with the source's
+  8 m gap across arc boundaries; stop at signals/stop signs using 3b.
+- Tests: no vehicle ever on an illegal arc, gaps never violated, vehicles drain from a closed
+  approach once it reopens.
+
+**3d — Engine integration (`index.html` → real graph)**
 - Replace grid assumptions: `GRID_N`, `nodeColRow`, `nodeId(c,r)`, `BUILDINGS{col,row}`, the
   generated suburbs/cul-de-sacs, Juniper Park & Ride and the 100 m block constants.
-- **Directed links** replace `edgeKey(a,b)` + `oneWay`; claims, following and closures become
-  per-direction. Positions interpolate along link polylines (`pointAlong(link, s)`).
-- **Routing:** binary-heap A* (straight-line distance / max speed heuristic) replaces the O(n²)
-  Dijkstra; `kShortest` keeps the ban-edge approach; route cache keyed by (from,to,congestion epoch).
-- **Signals:** controllers drive phase groups from Phase 1 instead of horizontal/vertical tests;
-  links internal to a controller cluster never stop. Stop signs from mapped approaches.
-- **psv-only links** routable by fleet shuttles/buses, not by human-driven cars.
+- Dispatch, pooling, ride sharing, emergencies and metrics call 3a/3c instead of the grid code.
 - One map view (Phase 2) replaces the seven fixed views; vehicle picking inverts its transform.
-- Depots at real parking ramps / surface lots (configurable list of nodes).
+- Depots at real parking ramps / surface lots (configurable list of nodes). Placeholder demand
+  (random street nodes) until Phase 5.
 - Port `tests/simulation.cjs` invariants to the real graph (legal moves only, capacity, completion).
 - Exit: 300+ vehicles run at 20× on a mid-range phone; no illegal moves in the regression run.
 
@@ -154,4 +185,6 @@ The box is a parameter of `tools/build_osm.py` and can be widened later without 
 | 0 | done | Source imported unchanged at `60774088`. |
 | 1 | code done | Pipeline + fixture tests pass. Needs one real run with network access to Overpass. |
 | 2 | code done | `viewer.html` renders whatever `data/mpls_graph.js` contains; currently the fixture sample. |
-| 3–9 | not started | |
+| 3a | done | Router + viewer route preview; A* 0.46 ms/route on a 7,000-node grid. |
+| 3b | done | Signal timing and stop-sign holds. |
+| 3c–9 | not started | |

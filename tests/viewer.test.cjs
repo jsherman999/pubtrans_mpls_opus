@@ -98,7 +98,7 @@ function runViewer({ withRealData }) {
   const errors = [];
   const sandbox = {
     console: { log() {}, error: (e) => errors.push(e) },
-    Math, Map, Set, Promise, Error, JSON, Number, String, Array, Float64Array, Uint8Array, Int32Array, Object,
+    Math, Map, Set, Promise, Error, JSON, Number, String, Array, Float64Array, Uint8Array, Int32Array, Uint32Array, Object,
     performance: { now: () => Date.now() },
     requestAnimationFrame: (fn) => rafQueue.push(fn),
     getComputedStyle: () => ({ getPropertyValue: () => " #123456" }),
@@ -109,7 +109,7 @@ function runViewer({ withRealData }) {
       documentElement: {},
       title: "",
       getElementById: (id) => (els[id] = els[id] || element(id)),
-      createElement: () => ({}),
+      createElement: () => element(""),
       head: {
         appendChild(s) {
           setTimeout(() => {
@@ -126,6 +126,7 @@ function runViewer({ withRealData }) {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(read("src/graph.js"), sandbox);
+  vm.runInContext(read("src/routing.js"), sandbox);
   vm.runInContext(inline, sandbox);
   const flush = () => { while (rafQueue.length) rafQueue.shift()(); };
   return new Promise((resolve) => setTimeout(() => { flush(); resolve({ sandbox, els, calls, flush, errors }); }, 20));
@@ -179,8 +180,31 @@ function runViewer({ withRealData }) {
   // Fit button restores the full view.
   els.fit.fire("click");
   assert.strictEqual(view.userMoved, false);
+  // Route preview: tap a start and an end on 3rd St (one-way west for cars, shuttle contraflow east).
+  const tapAt = (x, y) => {
+    els.map.fire("pointerdown", { pointerId: 3, offsetX: x * view.scale + view.ox, offsetY: y * view.scale + view.oy });
+    els.map.fire("pointerup", { pointerId: 3, offsetX: x * view.scale + view.ox, offsetY: y * view.scale + view.oy });
+    flush();
+  };
+  els.routeToggle.fire("click");
+  assert.ok(v.trip.on && els.routePanel.classList.contains("open"));
+  assert.ok(!els.inspect.classList.contains("open"), "route mode closes street details");
+  assert.strictEqual(els.routeHint.textContent, "Tap where the trip starts.");
+  tapAt(150, 450);
+  assert.strictEqual(els.routeHint.textContent, "Tap where the trip ends.");
+  tapAt(600, 450);
+  assert.ok(v.trip.car && v.trip.shuttle, "both routes found");
+  assert.ok(v.trip.shuttle.time < v.trip.car.time, "contraflow makes the shuttle faster");
+  const lines = els.routeResults.children.map((li) => li.children[1].textContent);
+  assert.ok(lines[0].startsWith("Private car: ") && lines[1].startsWith("Shuttle: "));
+  assert.ok(els.routeHint.textContent.startsWith("The shuttle uses transit-only streets."));
+  tapAt(300, 150);
+  assert.ok(v.trip.to === -1 && !v.trip.car, "a third tap starts a new trip");
+  els.routeToggle.fire("click");
+  assert.ok(!v.trip.on && !els.routePanel.classList.contains("open"));
+  assert.deepStrictEqual(errors, []);
   // Real data path: no sample notice.
   const real = await runViewer({ withRealData: true });
   assert.strictEqual(real.els.sampleNotice.hidden, true);
-  console.log("PASS: viewer loads with fallback, fits a phone screen, zooms, labels, picks, pans and refits.");
+  console.log("PASS: viewer loads with fallback, fits a phone screen, zooms, labels, picks, pans, refits and previews routes.");
 })().catch((e) => { console.error(e); process.exit(1); });
