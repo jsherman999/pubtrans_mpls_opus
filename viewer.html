@@ -128,7 +128,7 @@
     <li><svg width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="var(--casing)" stroke-width="7"/><line x1="0" y1="5" x2="28" y2="5" stroke="var(--arterial)" stroke-width="3"/></svg>Bridge</li>
     <li><svg width="28" height="10"><circle cx="14" cy="5" r="4" fill="var(--signal)"/></svg>Traffic signal (zoom in)</li>
     <li><svg width="28" height="10"><rect x="10" y="1" width="8" height="8" fill="var(--signal)" transform="rotate(45 14 5)"/></svg>Stop sign approach (zoom in)</li>
-    <li><svg width="28" height="10"><path d="M8 1 L20 5 L8 9 Z" fill="var(--portal)"/></svg>Road continues off the map</li>
+    <li><svg width="28" height="10"><path d="M8 1 L20 5 L8 9 Z" fill="var(--portal)"/></svg>Road continues off the map (zoom in)</li>
   </ul>
 </section>
 
@@ -208,6 +208,13 @@ const FRIENDLY_CLASS = {
 const DETAIL_ZOOM = 1.2;   // px per meter: arrows, signals, stops
 const LABEL_ZOOM = 0.9;
 const MAX_ZOOM = 24;
+// Portal (off-map road) markers: hidden at whole-area zoom, where 200+ of them line the edge,
+// then grow to full size by DETAIL_ZOOM.
+const PORTAL_ZOOM = 0.25;
+function portalMarkerRadius(scale) {
+  if (scale < PORTAL_ZOOM) return 0;
+  return 2.5 + 3.5 * Math.min(1, (scale - PORTAL_ZOOM) / (DETAIL_ZOOM - PORTAL_ZOOM));
+}
 
 let theme = {};
 function readTheme() {
@@ -479,7 +486,8 @@ function start(graph, sample) {
   }
 
   function drawPortals() {
-    const s = view.scale;
+    const s = view.scale, r = portalMarkerRadius(s);
+    if (!r) return;
     ctx.fillStyle = theme.portal;
     ctx.beginPath();
     for (const i of portals) {
@@ -490,7 +498,7 @@ function start(graph, sample) {
       const d = [gx, w - gx, gy, h - gy];
       const m = d.indexOf(Math.min(...d));
       const ang = [Math.PI, 0, -Math.PI / 2, Math.PI / 2][m];
-      const r = 6, ca = Math.cos(ang), sa = Math.sin(ang);
+      const ca = Math.cos(ang), sa = Math.sin(ang);
       ctx.moveTo(x + ca * r, y + sa * r);
       ctx.lineTo(x - ca * r * 0.6 - sa * r * 0.7, y - sa * r * 0.6 + ca * r * 0.7);
       ctx.lineTo(x - ca * r * 0.6 + sa * r * 0.7, y - sa * r * 0.6 - ca * r * 0.7);
@@ -707,7 +715,8 @@ function start(graph, sample) {
   resize();
   fit();
   // Exposed for debugging and for tests.
-  window.mplsViewer = { graph, view, fit, zoomAt, pan, select, toWorld, router, trip, setTripMode, tripTap };
+  window.mplsViewer = { graph, view, fit, zoomAt, pan, select, toWorld, router, trip, setTripMode, tripTap,
+    portalMarkerRadius };
 }
 </script>
 </body>

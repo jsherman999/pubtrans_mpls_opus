@@ -145,6 +145,12 @@ function runViewer({ withRealData }) {
   assert.ok(view.ox + graph.width * view.scale <= 390 + 1e-6);
   assert.ok(view.oy + graph.height * view.scale <= 780 + 1e-6);
   assert.ok(calls.stroke > 0);
+  // Portal markers: hidden when the whole real study area (6.1 km wide) fits a phone (~0.06 px/m)
+  // or a desktop window (~0.2 px/m), small in between, full size up close.
+  assert.strictEqual(v.portalMarkerRadius(0.06), 0);
+  assert.strictEqual(v.portalMarkerRadius(0.2), 0);
+  assert.ok(v.portalMarkerRadius(0.4) > 0 && v.portalMarkerRadius(0.4) < v.portalMarkerRadius(1.2));
+  assert.strictEqual(v.portalMarkerRadius(5), 6);
   // Zoom to street level on a street: details and labels draw without errors.
   const first = graph.links.find((l) => l.name === "2nd St");
   const [fx, fy] = sandbox.MplsGraph.pointAlong(first, first.len / 2);
