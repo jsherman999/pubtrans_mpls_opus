@@ -14,7 +14,7 @@ each phase was built, measured and checked.
 
 ```
 index.html            simulation page            viewer.html         street map + route preview
-source/index.html     original grid app (unchanged)
+source/index.html     original grid app (unchanged but for the phone pages)
 src/                  browser + Node modules, no dependencies, loaded with <script src>
   graph.js            decode data/mpls_graph.js; link geometry; link picking index
   routing.js          arcs in CSR arrays; A*/Dijkstra; backward route trees; connected core
@@ -28,7 +28,7 @@ src/                  browser + Node modules, no dependencies, loaded with <scri
   mapview.js          zoomable canvas map shared by both pages
   buildings.js        footprint decoding, spatial index, landmark designs
   pov.js              driver's-seat perspective view
-  pages.js            phone layout shared by both pages: map and panel as swipeable pages
+  pages.js            phone layout shared by all three pages: map and panel as swipeable pages
 tools/                offline builds (Python, standard library) and Node runners
   build_osm.py        OpenStreetMap streets      -> data/mpls_graph.js
   build_demand.py     Census blocks, LODES, OSM parking -> data/mpls_demand.js

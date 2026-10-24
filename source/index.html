@@ -183,6 +183,22 @@ button {min-height:36px;} .stepper-btns button {width:36px;height:36px;}
 .help-tooltip {position:fixed;inset:auto;margin:0;width:min(330px,calc(100vw - 24px));max-height:min(360px,calc(100dvh - 24px));overflow:auto;padding:13px 15px;border:1px solid #65758b;border-radius:8px;background:#252c37;color:#e2e8f0;font-size:13px;line-height:1.55;white-space:pre-line;box-shadow:0 6px 24px #0008;}
 .help-tooltip::backdrop {background:transparent;}
 [data-help-anchor] {display:none!important;}
+/* Phones: the maps page and, to its right, the controls as a second full-screen page that slides
+   in on a swipe left anywhere on the maps (or the Controls tab) and out on a swipe right (src/pages.js). */
+#pages-tab, #pages-back {display:none;}
+@media(max-width:800px) {
+ body {touch-action:pan-y pinch-zoom;}
+ .sidebar {position:fixed;inset:0;z-index:20;max-height:none;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y pinch-zoom;
+  padding:0 18px calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(100%);transition:transform 220ms ease-out;}
+ .sidebar.open {transform:none;}
+ #pages-back {display:flex;flex-shrink:0;position:sticky;top:0;z-index:1;align-items:center;width:calc(100% + 36px);margin:0 -18px 14px;min-height:48px;
+  padding:calc(8px + env(safe-area-inset-top,0px)) 18px 8px;border:0;border-bottom:1px solid #2a2c33;border-radius:0;background:#16171c;font-size:15px;font-weight:600;}
+ #pages-tab {display:flex;position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:15;flex-direction:column;align-items:center;gap:8px;
+  width:28px;min-height:0;padding:12px 0;border-right:0;border-radius:10px 0 0 10px;background:#2a2c33ee;color:#c5d4e5;font-size:12px;font-weight:600;}
+ #pages-tab::before {content:"";width:7px;height:7px;border:solid currentColor;border-width:0 0 1.5px 1.5px;transform:translateX(2px) rotate(45deg);}
+ #pages-tab span {writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:0.04em;}
+}
+@media(prefers-reduced-motion:reduce) {.sidebar {transition:none;}}
 </style>
 </head>
 <body>
@@ -262,6 +278,7 @@ button {min-height:36px;} .stepper-btns button {width:36px;height:36px;}
     </div><!-- /side-dock -->
   </div>
   <aside class="sidebar" id="controls">
+    <button id="pages-back" aria-expanded="false" aria-controls="controls" aria-label="Back to the maps">‹ Maps</button>
     <h1>PubTrans</h1>
     <p class="sub" data-help-anchor=".sidebar > h1">15 minute city · five connected neighborhoods</p>
 
@@ -5211,6 +5228,24 @@ function installHelpTooltips() {
 if(document.querySelectorAll)installHelpTooltips();
 dbg("SYSTEM", "Debug stream active — Auto mode running at 1× (slowest).");
 setInterval(tick, BASE_TICK_MS);
+</script>
+<button id="pages-tab" aria-controls="controls" aria-label="Show controls and live state"><span>Controls &amp; POV</span></button>
+<script src="../src/pages.js"></script>
+<script>
+// Phones: the controls are a second full-screen page to the right of the maps (src/pages.js). The
+// maps here do not pan, so a swipe left anywhere on them turns the page; a swipe right returns.
+(function () {
+  if (!window.MplsPages) return;
+  const phone = () => matchMedia("(max-width: 800px)").matches;
+  const pages = MplsPages.createPages({ panel: document.getElementById("controls"), edge: document.body,
+    tab: document.getElementById("pages-tab"), back: document.getElementById("pages-back"), isPhone: phone,
+    // The shortcut bar scrolls sideways; the guide, tooltips and sliders keep their own touches.
+    edgeAccept: (e) => !(e.target.closest && e.target.closest(".map-nav, dialog, .help-tooltip, input[type=range], select")) });
+  addEventListener("resize", () => pages.setOpen(pages.open));
+  document.querySelector('.map-nav a[href="#controls"]').addEventListener("click", (e) => {
+    if (phone()) { e.preventDefault(); pages.setOpen(true); }
+  });
+})();
 </script>
 </body>
 </html>
