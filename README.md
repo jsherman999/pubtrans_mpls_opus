@@ -83,6 +83,22 @@ the smallest fleet that meets the target is the recommendation. Options: `--mix`
 sedans, shuttles, buses), `--scales` (multiples of the default fleet), `--sampling 5|10|20`,
 `--day 0-6`, `--car-share 0-1`, `--keep-transit`, `--seed`.
 
+## Headless runs and metrics
+
+```
+node tools/run_scenario.cjs --until 10:00 --fleet 8000 --out-dir results/base
+node tools/run_scenario.cjs --vary fleet=2000,3000,4000,5000 --keep-transit --sampling 5 --out-dir results/sweep
+```
+
+A single run writes `summary.csv` (fleet and car miles and hours, empty share, occupancy,
+utilisation, wait and ride percentiles, energy), `series.csv` (every 15 minutes),
+`bridges.csv` (hourly crossings of the eight river bridges by direction) and
+`distributions.csv` (riders by minutes waited and ridden). `--vary fleet|carShare|pooling|sampling|day`
+runs one scenario per value and adds `sweep.csv` and `sweep.svg` (average wait and riders
+delivered against the varied setting). Other options: `--mix`, `--car-share`, `--keep-transit`,
+`--pooling`, `--day`, `--seed`, `--until`, `--no-ev`, `--no-rebalance`. The page's Run metrics
+panel downloads the same CSVs. Recorded sweeps: [`docs/results/`](docs/results/).
+
 ## Run locally
 
 ```
@@ -108,6 +124,7 @@ node tests/congestion.test.cjs                         # capacity, congestion, A
 node tests/demand.test.cjs                             # Census demand, daily totals, AM/PM shape
 node tests/fleet.test.cjs                              # scenario controls, fleet at scale, sweep
 node tests/pov.test.cjs                                # buildings, landmarks, driver view
+node tests/metrics.test.cjs                            # run metrics, CSV export, scenario runner
 node tests/page.test.cjs                               # simulation page, headless
 node tests/simulation.cjs                              # original grid app (slow, ~2 minutes)
 ```

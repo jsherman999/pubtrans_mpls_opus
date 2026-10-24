@@ -12,6 +12,7 @@
   const M = isNode ? require("./motion.js") : root.MplsMotion;
   const C = isNode ? require("./congestion.js") : root.MplsCongestion;
   const Dm = isNode ? require("./demand.js") : root.MplsDemand;
+  const Mt = isNode ? require("./metrics.js") : root.MplsMetrics;
   const { MODE_GENERAL, MODE_PSV } = R;
 
   const STEP = 3;                       // s, fixed simulation step (source SIM_MIN_PER_TICK)
@@ -94,6 +95,7 @@
     }
     const scale = demand ? opts.sampling : 1;            // real people or vehicles per agent
     const carEvery = demand ? Math.max(1, Math.round(opts.trafficScale / scale)) : 1;
+    const metrics = Mt.createMetrics({ step: STEP, scale });
     const dayStart = opts.dayStart ?? (demand ? Dm.DEFAULTS.dayStart : DAY_START);
     const router = options.router || R.createRouter(graph);
     const signals = T.createSignals(graph, { seed: opts.seed });
@@ -277,7 +279,7 @@
       const byType = {};
       for (const p of places) (byType[p.type] = byType[p.type] || []).push(p);
       S = {
-        t: 0, minute: dayStart, day: 0, dayOfWeek: settings.day,
+        t: 0, minute: dayStart, day: 0, dayOfWeek: settings.day, demand: !!demand,
         trips: [], walked: 0, unrouted: 0, completedPeople: 0, plan: null, carTrips: 0, shuttleTrips: 0, transitTrips: 0,
         forecast: [], repositions: 0, chargeSessions: 0, energyKwh: 0, flat: 0,
         places, byType,
@@ -488,6 +490,7 @@
       r.completedAt = S.t;
       S.completed++;
       S.completedPeople += r.weight || 1;
+      metrics.onComplete(r, S.t);
       S.rideSeconds += S.t - r.pickedUpAt;
       S.recentTrips.push({ ride: S.t - r.pickedUpAt, wait: r.pickedUpAt - r.requestedAt, assign: (r.assignedAt ?? r.pickedUpAt) - r.requestedAt, purpose: r.profile, hub: !!r.from.hub });
       if (S.recentTrips.length > 1000) S.recentTrips.splice(0, S.recentTrips.length - 1000);
@@ -518,7 +521,7 @@
         mode: kind === "private" ? MODE_GENERAL : MODE_PSV,
         capacity: CAPACITY[kind], state: "idle", retiring: false,
         riders: [], pickupQueue: [], segments: [], active: null, boarding: null,
-        idleSince: S.t, sharingDetour: 0, odo: 0, speedFactor: 1, pcu: (PCU[kind] || 1) * scale,
+        idleSince: S.t, sharingDetour: 0, odo: 0, metOdo: 0, speedFactor: 1, pcu: (PCU[kind] || 1) * scale,
         ...extra,
       };
       motion.place(v, node);
@@ -1466,6 +1469,10 @@
       if (S.t % 300 === 0) rebalance();
       moveVehicles();
       tickEnergy();
+      metrics.onStep(api);
+      const clockSec = dayStart * 60 + S.t;
+      if (clockSec % 900 === 0) metrics.sample(api);
+      if (clockSec % 3600 === 0) metrics.sampleBridges(api);
       if (S.t % congestion.PERIOD === 0) congestion.update(S.t, S.vehicles);
       if (Math.round(S.t / STEP) % 20 === 0) sample();
     }
@@ -1559,14 +1566,20 @@
       for (const arc of [...S.closures.keys()]) { bannedArcs[arc] = 0; motion.setClosed(arc, 0); }
       bannedCount = 0;
       congestion.reset();
+      metrics.reset();
       freshState();
       log("RESET", "Day reset");
     }
 
     freshState();
 
-    return {
-      graph, router, signals, motion, congestion, core, settings, demand, scale,
+    const api = {
+      graph, router, signals, motion, congestion, core, settings, demand, scale, metrics,
+      summary: () => metrics.summary(api),
+      csv(kind) {
+        return kind === "series" ? metrics.seriesCSV() : kind === "bridges" ? metrics.bridgesCSV()
+          : kind === "distributions" ? metrics.distributionsCSV() : metrics.summaryCSV(api);
+      },
       setDay(d) { settings.day = ((d % 7) + 7) % 7; },
       setCarShare(x) { settings.carShare = Math.max(0, Math.min(1, x)); },
       setTransitReplaced(on) { settings.transitReplaced = !!on; },
@@ -1586,8 +1599,9 @@
       locate: (v) => motion.locate(v),
       dispatch, tryShareRide, assignMultiStop, routeAvoiding,
       portals: { entries, exits, freewayIn, freewayOut, throughRoutes, localEntries, localExits },
-      countFleet, clock() { const m = Math.floor(S.minute); return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; },
+      countFleet, clock() { const m = Math.floor(S.minute + 1e-6); return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; },
     };
+    return api;
   }
 
   const api = { createSim, DEFAULTS, STEP, DAY_START, CAPACITY, FLEET_KINDS, mulberry32 };

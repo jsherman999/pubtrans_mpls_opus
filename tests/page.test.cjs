@@ -40,7 +40,7 @@ const html = read("index.html");
 const inline = html.split("<script>")[1].split("</script>")[0];
 const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
 assert.deepStrictEqual(scripts, ["data/mpls_graph.js", "data/mpls_demand.js", "src/graph.js", "src/routing.js", "src/traffic.js",
-  "src/motion.js", "src/congestion.js", "src/demand.js", "src/sim.js", "src/mapview.js", "src/buildings.js", "src/pov.js"],
+  "src/motion.js", "src/congestion.js", "src/demand.js", "src/metrics.js", "src/sim.js", "src/mapview.js", "src/buildings.js", "src/pov.js"],
   "page loads the data and engine modules in order");
 
 // Boot the page headless. Without data/mpls_demand.js it runs the placeholder demand.
@@ -255,6 +255,10 @@ assert.strictEqual(els.sShuttle.textContent, (sim.countFleet("shuttle") * K).toL
 const road = Number(els.hRoad.textContent.replace(/,/g, ""));
 assert.ok(road > 5000, `rush-hour vehicles on the road (${road})`);
 assert.match(els.status.textContent, /vehicles on the road · [\d,]+ waiting · [\d,]+ rides done/);
+// Run metrics in real numbers.
+assert.match(els.mVmt.textContent, /^[\d,]+ mi · [\d.]+ %$/);
+assert.match(els.mWait.textContent, /^[\d.]+ · [\d.]+ min$/);
+assert.ok(Number(els.mOcc.textContent) > 0.3);
 // Car share lever: fewer cars kept means more shuttle trips planned.
 const before = els.dTrips.textContent;
 els.carShare.fire("input", { target: { value: "10" } });

@@ -1,0 +1,39 @@
+metric,value
+clock,10:00
+sampling,5
+ridesRequested,58900
+ridesDelivered,37570
+stillWaiting,14670
+avgWaitMin,44.58
+waitP50Min,17.5
+waitP90Min,62.5
+rideP50Min,14.5
+rideP90Min,37.5
+pooledRiders,41655
+fleetVehicles,1000
+fleetVMT,62158
+fleetVHT,3754
+deadheadPct,34.3
+occupancy,2.77
+utilizationPct,85.1
+carVMT,209804
+carVHT,10516
+walkTrips,5115
+carTrips,57710
+energyMWh,53.6
+chargeSessions,0
+gridlockJumps,24
+sedan VMT,8839
+sedan deadhead %,48.3
+sedan occupancy,0.89
+shuttle VMT,38369
+shuttle deadhead %,33.7
+shuttle occupancy,2.37
+bus VMT,14950
+bus deadhead %,27.5
+bus occupancy,4.91
+fleet hours to pickup,791
+fleet hours idle,670
+fleet hours carrying riders,2710
+fleet hours repositioning,62
+fleet hours returning,266

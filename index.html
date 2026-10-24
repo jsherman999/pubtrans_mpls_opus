@@ -210,6 +210,17 @@
     <canvas id="chartQueued" aria-label="Ride requests not yet assigned a vehicle, last 4 simulated hours"></canvas></div>
   <div id="chartTip" class="num" aria-live="off"></div>
 
+  <h2>Run metrics</h2>
+  <div class="row"><span title="Fleet vehicle-miles travelled, and the share driven with nobody aboard">Fleet miles · empty</span><span id="mVmt" class="num">—</span></div>
+  <div class="row"><span title="Passenger-miles per vehicle-mile">Average occupancy</span><span id="mOcc" class="num">—</span></div>
+  <div class="row"><span title="Share of fleet time carrying riders or heading to them">Fleet utilisation</span><span id="mUtil" class="num">—</span></div>
+  <div class="row"><span>Wait, median · 90th percentile</span><span id="mWait" class="num">—</span></div>
+  <div class="row"><span>Ride, median · 90th percentile</span><span id="mRide" class="num">—</span></div>
+  <div class="row"><span>Private car miles · hours</span><span id="mCar" class="num">—</span></div>
+  <div class="btns"><button data-csv="summary">Summary CSV</button><button data-csv="series">15-minute CSV</button>
+    <button data-csv="bridges">Bridges CSV</button><button data-csv="distributions">Waits &amp; rides CSV</button></div>
+  <p class="hint">For scenario sweeps without the page: <code>node tools/run_scenario.cjs --vary fleet=2000,4000,6000</code>.</p>
+
   <h2>Chokepoints</h2>
   <label class="row" style="justify-content:flex-start;gap:8px"><input type="checkbox" id="congestionLayer" checked> Show congestion on the map</label>
   <div id="choke"></div>
@@ -309,6 +320,7 @@
 <script src="src/motion.js"></script>
 <script src="src/congestion.js"></script>
 <script src="src/demand.js"></script>
+<script src="src/metrics.js"></script>
 <script src="src/sim.js"></script>
 <script src="src/mapview.js"></script>
 <script src="src/buildings.js"></script>
@@ -850,6 +862,7 @@ function start(graph) {
         `through-traffic). Each private car on the map stands for ${D.trafficScale} and takes their road space.`
       : "No private traffic: shuttles only.";
     renderChokepoints();
+    renderMetrics();
     $("sharingVal").textContent = sim.settings.rideSharing + "%";
     $("sharingHint").textContent = sim.settings.rideSharing
       ? `Riders from the same ${6 * sim.settings.rideSharing} m area to the same area share a vehicle, and shuttles and buses pick up waiting riders along their way, ` +
@@ -941,6 +954,28 @@ function start(graph) {
     const x = H[planHover];
     $("planTip").textContent = x ? `${String(planHover).padStart(2, "0")}:00–${String(planHover + 1).padStart(2, "0")}:00 · ` +
       `${Math.round(x.shuttle).toLocaleString()} by shuttle · ${Math.round(x.car).toLocaleString()} by car · ${Math.round(x.walk).toLocaleString()} on foot` : "";
+  }
+
+  // Run metrics and CSV downloads (real people and vehicles).
+  function renderMetrics() {
+    const m = sim.summary(), n = (x) => (x == null ? "—" : x.toLocaleString());
+    $("mVmt").textContent = `${n(m.fleetVMT)} mi · ${m.deadheadPct ?? "—"} %`;
+    $("mOcc").textContent = m.occupancy ?? "—";
+    $("mUtil").textContent = `${m.utilizationPct} %`;
+    $("mWait").textContent = m.waitP50Min == null ? "—" : `${m.waitP50Min} · ${m.waitP90Min} min`;
+    $("mRide").textContent = m.rideP50Min == null ? "—" : `${m.rideP50Min} · ${m.rideP90Min} min`;
+    $("mCar").textContent = `${n(m.carVMT)} mi · ${n(m.carVHT)} h`;
+  }
+  for (const btn of document.querySelectorAll("[data-csv]")) {
+    btn.addEventListener("click", () => {
+      const kind = btn.dataset.csv, text = sim.csv(kind);
+      if (typeof Blob === "undefined" || typeof URL === "undefined" || !URL.createObjectURL) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
+      a.download = `pubtrans-mpls-${kind}-${sim.clock().replace(":", "")}.csv`;
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
   }
 
   // Chokepoint list: every river bridge, then the most loaded ramps and map-edge entries.

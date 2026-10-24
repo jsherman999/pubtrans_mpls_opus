@@ -364,10 +364,37 @@ Split into four steps so each lands green on its own.
   phone at 4–5× slower would spend 2–5 ms a frame, well inside 30–60 fps — not yet confirmed on
   a real phone.
 
-### Phase 8 — Metrics, export and headless runs
-- VMT, VHT, deadhead %, occupancy, wait/ride distributions, bridge loads, fleet utilization.
-- CSV export; seeded headless runner in Node (`tools/run_scenario.cjs`) for scenario sweeps.
-- Exit: a sweep of fleet sizes produces a CSV and a summary chart.
+### Phase 8 — Metrics, export and headless runs ✅
+- Metrics (`src/metrics.js`, fed by the engine every step, in real people and vehicles): fleet
+  VMT and VHT, empty (deadhead) miles and share, occupancy (passenger-miles per vehicle-mile),
+  utilisation (fleet time carrying or fetching riders vs idle and charging), each by vehicle
+  type; rider wait and ride distributions (1-minute bins, percentiles); private-car VMT and VHT;
+  energy and charging; gridlock jumps; a 15-minute time series (requests, deliveries, waiting,
+  fleet busy/idle/charging, fleet and empty miles, cars on the road, congested segments); hourly
+  river-bridge crossings by direction.
+- CSV export: `sim.csv("summary" | "series" | "bridges" | "distributions")`; the page's **Run
+  metrics** panel shows the headline figures and downloads the four CSVs.
+- Headless runner `tools/run_scenario.cjs`: seeded single runs, or `--vary
+  fleet|carShare|pooling|sampling|day` sweeps writing `sweep.csv` (one row of metrics per value)
+  and `sweep.svg` (average wait and riders delivered against the setting: two panels sharing the
+  x axis, one measure each), plus each run's CSVs.
+- Recorded sweeps (`docs/results/`, 05:30–10:00 Wednesday, 1:5):
+  | Transit kept, half of car trips → SDEV | 1,000 | 2,000 | 3,000 | 4,000 | 5,000 |
+  |---|---|---|---|---|---|
+  | Average wait (min) | 44.6 | 21.1 | 12.6 | 8.7 | 6.8 |
+  | Riders delivered | 37,570 | 49,765 | 54,320 | 56,030 | 56,805 |
+  | Occupancy · empty miles | 2.77 · 34 % | 2.07 · 37 % | 1.50 · 40 % | 1.20 · 41 % | 1.06 · 43 % |
+
+  | Transit replaced too | 4,000 | 6,000 | 8,000 | 10,000 | 12,000 | 16,000 |
+  |---|---|---|---|---|---|---|
+  | Average wait (min) | 47.0 | 36.2 | 30.6 | 26.5 | 23.5 | 23.5 |
+  | Riders delivered | 82,470 | 95,670 | 100,710 | 105,505 | 105,470 | 105,750 |
+  | Occupancy · empty miles | 2.26 · 37 % | 2.17 · 38 % | 2.05 · 38 % | 1.85 · 39 % | 1.70 · 40 % | 1.49 · 40 % |
+- Tests: `node tests/metrics.test.cjs` (fleet miles = odometers, empty ≤ total, by-type sums,
+  every delivered rider in both distributions, fleet hours = fleet × time, the 15-minute rows sum
+  to the totals, hourly bridge rows, CSV shapes; a seeded two-run sweep writes `sweep.csv`, a
+  two-panel `sweep.svg` and per-run CSVs, and repeats exactly). The page test reads the panel.
+- **Exit:** `node tools/run_scenario.cjs --vary fleet=...` produces the CSV and the chart above.
 
 ### Phase 9 — Polish and publish
 - README/ARCHITECTURE rewrite, attribution footer, mobile layout pass, GitHub Pages.
@@ -405,4 +432,6 @@ Split into four steps so each lands green on its own.
 | 5 | done | Census 2020 blocks + LODES 2023 + OSM parking → 822 zones, 114k residents, 226k jobs; commuters, UMN, hospitals, errands, visitors, events by day of week; 721k trips on a Wednesday with 08–09 and 16–17 peaks; 1:20 agents; car-share lever, edge hubs, parking, green splits, gridlock relief. Downtown-residents target missed (35.7k Census vs 45k plan). |
 | 6 | done | Scenario controls (transit, cars kept, pooling, fleet, depots, EV, rebalancing); grid dispatch and request-driven sharing; area pooling; rebalancing to a forecast; battery and charging; fleet sweep. Revised after Phase 7: riders/fleet sampled 1:10 (sweep 1:5), cars 1:20; all-transit scenario is street-capacity bound (~105k delivered by 10:00 from ~10,000 vehicles); with transit kept, 4,000 vehicles give an 8.7-min wait. |
 | 7 | done | 10,680 OSM buildings with heights (parts for towers), footprints on the map, ride-along Driver POV with culling and LOD, six landmark designs; ~0.5 ms per POV frame in desktop Chrome downtown. |
-| 8–9 | not started | |
+| Fleet fix | done | Riders/fleet 1:10 (sweeps 1:5), cars 1:20; dispatch index and rebalancing fixes; all-transit scenario is street-bound (~105k riders by 10:00), transit-kept scenario needs ~4,000 vehicles for 8.7 min. |
+| 8 | done | Metrics (VMT/VHT, deadhead, occupancy, utilisation, distributions, series, bridge loads), CSV export on the page, `tools/run_scenario.cjs` sweeps with CSV + SVG chart, recorded in `docs/results/`. |
+| 9 | not started | |
