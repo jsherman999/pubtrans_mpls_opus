@@ -10,6 +10,7 @@
   const R = isNode ? require("./routing.js") : root.MplsRouting;
   const T = isNode ? require("./traffic.js") : root.MplsTraffic;
   const M = isNode ? require("./motion.js") : root.MplsMotion;
+  const C = isNode ? require("./congestion.js") : root.MplsCongestion;
   const { MODE_GENERAL, MODE_PSV } = R;
 
   const STEP = 3;                       // s, fixed simulation step (source SIM_MIN_PER_TICK)
@@ -23,6 +24,7 @@
   const NODE_PORTAL = 1;
 
   const CAPACITY = { sedan: 4, shuttle: 8, bus: 20, police: 4, fire: 6, firecar: 4, recovery: 8, private: 1 };
+  const PCU = { bus: 2, fire: 2, recovery: 1.5 };   // lane space and stop-line time, in cars
   const FLEET_KINDS = ["sedan", "shuttle", "bus"];
   const FLEET_KEY = { sedan: "sedans", shuttle: "shuttles", bus: "buses" };   // settings keys
   const RESPONDERS = ["police", "fire", "firecar"];
@@ -34,7 +36,8 @@
     population: 2500,
     sedans: 60, shuttles: 60, buses: 10,
     rideSharing: 100,                   // %, on-the-way pickups for shuttles and buses
-    privateTraffic: 3,                  // × baseline private arrivals and freeway through-traffic
+    privateTraffic: 1,                  // × baseline private arrivals and freeway through-traffic
+    trafficScale: 4,                    // real cars each private-car agent stands for (its PCU)
     places: { residential: 80, employer: 30, school: 4, grocery: 12, station: 4 },
     placeSpacing: 140,                  // m between placeholder places
     depots: [
@@ -45,8 +48,11 @@
       { name: "UMN East Bank Ramp", lat: 44.9739, lon: -93.2300 },
     ],
     base: { name: "Police / Fire (City Hall)", lat: 44.9774, lon: -93.2654 },
-    localPerHour: 240,                  // private visitors entering at portals, per hour at 1×
-    throughPerHour: 720,                // freeway through-trips, per hour at 1×
+    localPerHour: 2500,                 // real cars entering at the map edge per hour at 1×, off-peak
+    throughPerHour: 2500,               // real freeway through-trips per hour at 1×, off-peak
+    amPeak: 3,                          // extra arrivals at 08:00, × the base rate (×4 in all)
+    throughPeak: 0.8,                   // extra freeway through-traffic at 08:00, × the base rate
+    congestionRouting: true,            // routes and drivers in queues avoid congested streets
     rareEvents: true,
   };
 
@@ -64,6 +70,7 @@
     const router = options.router || R.createRouter(graph);
     const signals = T.createSignals(graph, { seed: opts.seed });
     const motion = M.createMotion(graph, router, signals);
+    const congestion = C.createCongestion(graph, router, motion, signals);
     const arcs = router.arcs;
     const nx = graph.nodes.x, ny = graph.nodes.y, nflags = graph.nodes.flags;
     const core = router.connectedCore(MODE_GENERAL);
@@ -150,6 +157,12 @@
     const localEntries = [], localExits = [];
     for (const v of entries) { const r = router.route(v, core.nodes[0]); if (r) localEntries.push(v); }
     for (const v of exits) { const r = router.route(core.nodes[0], v); if (r) localExits.push(v); }
+    // Traffic enters and leaves in proportion to the capacity of the road at the edge, so
+    // freeways and arterials carry most of it.
+    const edgeWeight = (list) => { let c = 0; return list.map((a) => (c += a.reduce((s, arc) => s + congestion.capacity[arc.id], 0))); };
+    const entryWeight = edgeWeight(localEntries.map((v) => graph.out[v].filter((a) => !a.psvOnly)));
+    const exitWeight = edgeWeight(localExits.map((v) => graph.inc[v].filter((a) => !a.psvOnly)));
+    const throughWeight = edgeWeight(throughRoutes.map((r) => [arcs[r.arcs[0]]]));
 
     // ------------------------------------------------------------------ state
     let rng, S;
@@ -164,10 +177,10 @@
         depots: opts.depots.map((d) => snapSite(d, "depot")),
         base: snapSite(opts.base, "base"),
         humans: [], agenda: [], agendaPos: 0,
-        queue: [], vehicles: [], incidents: [], closures: new Map(),
+        queue: [], vehicles: [], parked: [], atPortal: [], incidents: [], closures: new Map(),
         seq: {}, nextReq: 1, nextIncident: 1,
         completed: 0, rideSeconds: 0, boardedWaitSeconds: 0, boardedCount: 0,
-        pooled: 0, sharedPickups: 0, sharingCursor: 0,
+        pooled: 0, sharedPickups: 0, sharingCursor: 0, reroutes: 0,
         localCredit: 0, throughCredit: 0,
         nextPolice: 0, nextFire: 0, nextTrouble: 0,
         log: [], logSeq: 0, history: [], recentTrips: [],
@@ -298,7 +311,7 @@
         mode: kind === "private" ? MODE_GENERAL : MODE_PSV,
         capacity: CAPACITY[kind], state: "idle", retiring: false,
         riders: [], pickupQueue: [], segments: [], active: null, boarding: null,
-        idleSince: S.t, sharingDetour: 0, odo: 0, speedFactor: 1,
+        idleSince: S.t, sharingDetour: 0, odo: 0, speedFactor: 1, pcu: PCU[kind] || 1,
         ...extra,
       };
       motion.place(v, node);
@@ -352,12 +365,24 @@
     function routeAvoiding(from, to, mode, passTag = 0) {
       if (from === to) return { from, to, arcs: [], time: 0, length: 0 };
       const r = stopNode[to] ? router.pathTo(treeFor(to, mode), from) : router.route(from, to, { mode });
-      if (!r || !bannedCount) return r;
-      let blocked = false;
-      for (const a of r.arcs) if (bannedArcs[a] && motion.closed[a] !== passTag) { blocked = true; break; }
-      if (!blocked) return r;   // the free-flow best route avoids every closure, so it is still best
-      return router.search(from, to, { mode, cost: (a) => (bannedArcs[a] && motion.closed[a] !== passTag ? Infinity : 0) });
+      if (!r) return r;
+      // The free-flow best route is still the best when it avoids every closure and every
+      // congested arc (extra costs are never negative); otherwise search with them.
+      let detour = false;
+      if (bannedCount) for (const a of r.arcs) if (bannedArcs[a] && motion.closed[a] !== passTag) { detour = true; break; }
+      if (!detour && opts.congestionRouting && congestion.pathDelayed(r.arcs)) detour = true;
+      if (!detour) return r;
+      if (jamEpoch !== congestion.epoch + bannedCount * 1e6) { jamCache.clear(); jamEpoch = congestion.epoch + bannedCount * 1e6; }
+      const key = (from * graph.nodes.count + to) * 8 + mode * 2 + (passTag ? 1 : 0);
+      if (jamCache.has(key) && !passTag) return jamCache.get(key);
+      const extra = opts.congestionRouting ? congestion.extra : null;
+      const res = router.search(from, to, { mode, cost: (a) => (bannedArcs[a] && motion.closed[a] !== passTag ? Infinity : extra ? extra[a] : 0) });
+      if (!passTag) { if (jamCache.size > 4000) jamCache.clear(); jamCache.set(key, res); }
+      return res;
     }
+    // Congestion-aware routes, valid until the next congestion update or closure change.
+    const jamCache = new Map();
+    let jamEpoch = -1;
     // Almost every trip ends at a stop: a place, a depot, the emergency base or a portal where
     // visitors leave (about 300 nodes). One backward route tree per stop, built on first use
     // (about 1 ms and 43 KB each), answers every route into it from anywhere, so dispatch, ride
@@ -749,15 +774,27 @@
     }
 
     // ------------------------------------------------------------------ private traffic
+    // Morning peak shape: a bell centred on 08:00 (standard deviation 35 minutes).
+    const amPeak = (minute) => Math.exp(-0.5 * ((minute - 480) / 35) ** 2);
+    function pickWeighted(list, cum) {
+      const x = rng() * cum[cum.length - 1];
+      let lo = 0, hi = cum.length - 1;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] > x) hi = m; else lo = m + 1; }
+      return list[lo];
+    }
     function spawnLocal() {
       if (!localEntries.length) return null;
+      // In the morning most visitors are commuters bound for a job or school, staying all day.
+      const commuter = rng() < 0.9 * amPeak(S.minute);
+      const targets = commuter ? S.byType.employer.concat(S.byType.employer, S.byType.school) : S.places;
       for (let attempt = 0; attempt < 8; attempt++) {
-        const from = pick(localEntries), to = pick(S.places);
+        const from = pickWeighted(localEntries, entryWeight), to = pick(targets);
         if (portalBusy(from)) continue;
         const r = routeAvoiding(from, to.node, MODE_GENERAL);
         if (!r || !r.arcs.length) continue;
-        const v = makeVehicle("private", from, { state: "private_in", destination: to });
+        const v = makeVehicle("private", from, { state: "private_in", destination: to, commuter, pcu: opts.trafficScale });
         motion.setRoute(v, r.arcs);
+        S.atPortal.push(v);
         return v;
       }
       return null;
@@ -765,37 +802,49 @@
     function spawnThrough() {
       if (!throughRoutes.length) return null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        const r = pick(throughRoutes);
+        const r = pickWeighted(throughRoutes, throughWeight);
         if (portalBusy(r.from)) continue;
-        const v = makeVehicle("private", r.from, { state: "private_through", through: true });
+        const v = makeVehicle("private", r.from, { state: "private_through", through: true, pcu: opts.trafficScale });
         motion.setRoute(v, r.arcs);
+        S.atPortal.push(v);
         return v;
       }
       return null;
     }
     // A portal already holding a car that has not yet found room to enter takes no more.
     function portalBusy(node) {
-      for (const v of S.vehicles) if (v.kind === "private" && v.lane < 0 && v.route && v.node === node) return true;
+      if (S.atPortal.length > 32) S.atPortal = S.atPortal.filter((v) => v.lane < 0 && v.route && !v.removed);
+      for (const v of S.atPortal) if (v.lane < 0 && v.route && !v.removed && v.node === node) return true;
       return false;
     }
     function arrivePrivate(v) {
       if (v.state === "private_through" || v.state === "private_out") return removeVehicle(v);
       // Visitors park off-street for a while, then leave the area.
       v.state = "private_parked";
-      v.departAt = S.t + (5 + rng() * 55) * 60;
+      // Commuters leave between 16:15 and 18:45; other visitors after 5 to 60 minutes.
+      const stay = v.commuter ? Math.max(60, 16.25 * 60 + rng() * 150 - S.minute) : 5 + rng() * 55;
+      v.departAt = S.t + stay * 60;
+      // Parked cars leave the vehicle list (thousands by mid-morning) for a queue by departure.
+      const i = S.vehicles.indexOf(v);
+      if (i >= 0) S.vehicles.splice(i, 1);
+      let lo = 0, hi = S.parked.length;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (S.parked[m].departAt <= v.departAt) lo = m + 1; else hi = m; }
+      S.parked.splice(lo, 0, v);
     }
     function tickPrivateTraffic() {
-      const rate = settings.privateTraffic;
-      S.localCredit = Math.min(2, S.localCredit + rate * opts.localPerHour * STEP / 3600);
+      const rate = settings.privateTraffic, peak = amPeak(S.minute);
+      const agents = rate / opts.trafficScale * STEP / 3600;
+      S.localCredit = Math.min(4, S.localCredit + agents * opts.localPerHour * (1 + opts.amPeak * peak));
       while (S.localCredit >= 1) { S.localCredit -= 1; spawnLocal(); }
-      S.throughCredit = Math.min(2, S.throughCredit + rate * opts.throughPerHour * STEP / 3600);
+      S.throughCredit = Math.min(4, S.throughCredit + agents * opts.throughPerHour * (1 + opts.throughPeak * peak));
       while (S.throughCredit >= 1) { S.throughCredit -= 1; spawnThrough(); }
-      for (const v of S.vehicles.slice()) {
-        if (v.kind !== "private" || v.state !== "private_parked" || S.t < v.departAt) continue;
-        const exit = pick(localExits);
+      while (S.parked.length && S.parked[0].departAt <= S.t) {
+        const v = S.parked.shift();
+        const exit = localExits.length ? pickWeighted(localExits, exitWeight) : null;
         const r = exit != null ? routeAvoiding(v.node, exit, MODE_GENERAL) : null;
-        if (!r || !r.arcs.length) { removeVehicle(v); continue; }
+        if (!r || !r.arcs.length) { v.removed = true; continue; }
         v.state = "private_out";
+        S.vehicles.push(v);
         motion.setRoute(v, r.arcs);
       }
     }
@@ -935,12 +984,47 @@
       for (const v of S.vehicles) if (v.route) onRoad.push(v);
       const arrived = motion.step(onRoad, S.t - STEP, STEP);
       for (const v of arrived) if (!v.removed) onArrive(v);
+      for (const v of onRoad) v.queuedFor = v.route && v.waiting === "queue" ? (v.queuedFor || 0) + STEP : 0;
+      if (opts.congestionRouting && congestion.congestedArcs) rerouteQueued();
       // Vehicles held at a closure find a way around it.
       for (const v of onRoad) {
         if (v.waiting !== "closed" || v.removed || !v.route) continue;
         const dest = arcs[v.route[v.route.length - 1]].to;
         const r = routeFrom(v, dest);
         if (r && r.arcs.length) { motion.setRoute(v, r.arcs); log("REPLAN", `${v.id} detouring around a closure`); }
+      }
+    }
+
+    // Drivers stuck in a queue for a minute, with real congestion still ahead, look for a faster
+    // way to where they are going: up to four per step (longest wait first), at most every two
+    // minutes each (five after finding nothing better). Freeway through-traffic
+    // and responders keep their routes.
+    function rerouteQueued() {
+      const cands = [];
+      for (const v of onRoad) {
+        if (v.queuedFor < 60 || v.removed || !v.route || v.lane < 0 || v.through || v.incident || v.ri >= v.route.length - 1) continue;
+        if (S.t < (v.rerouteAfter ?? 0)) continue;
+        cands.push(v);
+      }
+      cands.sort((a, b) => b.queuedFor - a.queuedFor);
+      let tries = 0;
+      for (const v of cands) {
+        if (tries >= 4) break;
+        v.rerouteAfter = S.t + 300;   // look again in five minutes unless a better way turns up
+        // Worth a search only if the rest of the route runs into real congestion.
+        if (!congestion.pathDelayed(v.route.slice(v.ri + 1))) continue;
+        tries++;
+        const dest = arcs[v.route[v.route.length - 1]].to;
+        const cur = congestion.routeTime(v.route, v.ri + 1);
+        const alt = routeFrom(v, dest);
+        if (!alt || alt.arcs.length < 2) continue;
+        const altTime = congestion.routeTime(alt.arcs, 1);
+        if (altTime < cur * 0.85 && cur - altTime > 30) {
+          v.rerouteAfter = S.t + 120;
+          motion.setRoute(v, alt.arcs);
+          S.reroutes++;
+          log("REPLAN", `${v.id} leaves a queue on ${arcs[v.route[0]].link.name || "an unnamed street"} · saves about ${Math.round((cur - altTime) / 60)} min`);
+        }
       }
     }
 
@@ -957,12 +1041,13 @@
       dispatch();
       returnIdle();
       moveVehicles();
+      if (S.t % congestion.PERIOD === 0) congestion.update(S.t, S.vehicles);
       if (Math.round(S.t / STEP) % 20 === 0) sample();
     }
     function run(n) { for (let i = 0; i < n; i++) step(); }
 
     function counts() {
-      const c = { onRoad: 0, queued: 0, atSignal: 0, fleetBusy: 0, fleetIdle: 0, private: 0, through: 0, responders: 0, parked: 0, byKind: {} };
+      const c = { onRoad: 0, queued: 0, atSignal: 0, fleetBusy: 0, fleetIdle: 0, private: 0, through: 0, responders: 0, parked: 0, privateCars: 0, byKind: {} };
       for (const v of S.vehicles) {
         c.byKind[v.kind] = (c.byKind[v.kind] || 0) + 1;
         if (v.lane >= 0) {
@@ -971,9 +1056,13 @@
           else if (v.waiting === "signal" || v.waiting === "stop") c.atSignal++;
         }
         if (FLEET_KINDS.includes(v.kind)) { if (v.state === "idle") c.fleetIdle++; else c.fleetBusy++; }
-        else if (v.kind === "private") { if (v.through) c.through++; else c.private++; if (v.state === "private_parked") c.parked++; }
+        else if (v.kind === "private") {
+          if (v.through) c.through++; else c.private++;
+          if (v.lane >= 0) c.privateCars += v.pcu;
+        }
         else c.responders++;
       }
+      c.parked = S.parked.length;
       return c;
     }
     function sample() {
@@ -1028,7 +1117,7 @@
         queue: S.queue.map((r) => r.id),
         vehicles: S.vehicles.map((v) => [v.id, v.state, v.route ? v.route.length : -1, v.ri, Math.round(v.s * 1000), v.lane, v.node,
           v.riders.map((r) => r.id), v.pickupQueue.map((r) => r.id)]),
-        closures: [...S.closures.keys()],
+        closures: [...S.closures.keys()], parked: S.parked.map((v) => v.id),
       });
     }
 
@@ -1036,6 +1125,7 @@
       for (const v of S.vehicles.slice()) removeVehicle(v);
       for (const arc of [...S.closures.keys()]) { bannedArcs[arc] = 0; motion.setClosed(arc, 0); }
       bannedCount = 0;
+      congestion.reset();
       freshState();
       log("RESET", "Day reset");
     }
@@ -1043,7 +1133,8 @@
     freshState();
 
     return {
-      graph, router, signals, motion, core, settings,
+      graph, router, signals, motion, congestion, core, settings,
+      chokepoints: (top) => congestion.chokepoints(S.vehicles, top),
       get state() { return S; },
       step, run, reset,
       setPopulation, setFleet, triggerEmergency, breakdown, addRequest,

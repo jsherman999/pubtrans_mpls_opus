@@ -37,8 +37,9 @@ network from `data/sample_graph.js`.
 `index.html` runs the shuttle simulation on the real streets: sedans, shuttles and buses
 dispatched from five parking-ramp depots to riders' scheduled trips (placeholder homes, jobs,
 schools, groceries and hubs until the census/jobs demand model), with pooling and on-the-way
-ride sharing, private traffic and freeway through-traffic entering at the map edge, signals,
-stop signs, police/fire closures and breakdowns. Drag, scroll or pinch the map; tap a vehicle to
+ride sharing, private traffic and freeway through-traffic entering at the map edge, signals that
+discharge at lane capacity, congestion that routes and drivers avoid, police/fire closures and
+breakdowns. The Chokepoints panel tracks the river bridges, freeway ramps and map-edge entries. Drag, scroll or pinch the map; tap a vehicle to
 see its riders and route (and follow it), or a place to see who is waiting. The panel (a bottom
 sheet on phones) has playback speed, fleet and demand controls, live metrics and an event log.
 
@@ -63,6 +64,7 @@ node tests/viewer.test.cjs                             # decoder and street view
 node tests/routing.test.cjs                            # router, signals, 7,000-node benchmark
 node tests/motion.test.cjs                             # vehicle motion, up to 3,400 vehicles
 node tests/sim.test.cjs                                # engine on the real network
+node tests/congestion.test.cjs                         # capacity, congestion, AM peak
 node tests/page.test.cjs                               # simulation page, headless
 node tests/simulation.cjs                              # original grid app (slow, ~2 minutes)
 ```

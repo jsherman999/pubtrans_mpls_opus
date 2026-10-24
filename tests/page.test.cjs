@@ -40,7 +40,7 @@ const html = read("index.html");
 const inline = html.split("<script>")[1].split("</script>")[0];
 const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
 assert.deepStrictEqual(scripts, ["data/mpls_graph.js", "src/graph.js", "src/routing.js", "src/traffic.js",
-  "src/motion.js", "src/sim.js", "src/mapview.js"], "page loads the data and engine modules in order");
+  "src/motion.js", "src/congestion.js", "src/sim.js", "src/mapview.js"], "page loads the data and engine modules in order");
 
 const calls = { fill: 0, stroke: 0, arc: 0, fillText: 0 };
 const ctx = new Proxy({}, {
@@ -114,6 +114,22 @@ assert.ok(Number(els.hDone.textContent.replace(/,/g, "")) > 0, "completed rides 
 assert.ok(els.log.children.length > 0, "event log filled");
 assert.strictEqual(sim.audit().length, 0, sim.audit().slice(0, 3).join("; "));
 
+// Chokepoint panel: eight river bridges, then ramps and entries; a row centres the map on it.
+const groups = els.choke.children.filter((c) => c.textContent && !c.children.length);
+assert.deepStrictEqual(groups.map((g) => g.textContent), ["River bridges", "Busiest freeway ramps", "Busiest entries at the map edge"]);
+const rows = els.choke.children.filter((c) => c.children.length);
+assert.strictEqual(rows.length, 8 + 4 + 4);
+assert.match(rows[3].children[1].textContent, /^[\d,]+ cars\/h · \d+ % of capacity$/);
+assert.match(rows[3].attrs["aria-label"], /I-35W Bridge/);
+rows[3].fire("click");
+const i35 = sim.congestion.bridges[3];
+assert.ok(Math.abs((view.cssW / 2 - view.ox) / view.scale - i35.x) < 1e-6, "map centred on the I-35W bridge");
+els.congestionLayer.fire("change", { target: { checked: false } });
+els.congestionLayer.fire("change", { target: { checked: true } });
+assert.match(els.hCongestion.textContent, /^\d+ · \d+$/);
+frame();
+map.fit();
+
 // Tap a fleet vehicle on the road (paused, so it holds still): details open; Follow keeps it centred.
 els.pause.fire("click");
 map.zoomAt(12, 195, 390);
@@ -179,8 +195,9 @@ assert.strictEqual(sim.settings.population, 2750);
 els.rideSharing.fire("input", { target: { value: "0" } });
 assert.strictEqual(sim.settings.rideSharing, 0);
 assert.match(els.sharingHint.textContent, /^Off/);
-els.privateTraffic.fire("input", { target: { value: "5" } });
-assert.strictEqual(sim.settings.privateTraffic, 5);
+els.privateTraffic.fire("input", { target: { value: "2" } });
+assert.strictEqual(sim.settings.privateTraffic, 2);
+assert.match(els.privateHint.textContent, /^About 10,000 cars an hour cross the map edge off-peak and 29,000 at 08:00/);
 els.emergency.fire("click");
 assert.strictEqual(sim.state.incidents.length >= 1, true);
 frame();

@@ -14,27 +14,8 @@ const R = require(path.join(ROOT, "src/routing.js"));
 const T = require(path.join(ROOT, "src/traffic.js"));
 const M = require(path.join(ROOT, "src/motion.js"));
 const { makeSynthGrid, mulberry32 } = require("./fixtures/synth_grid.cjs");
+const { tiny } = require("./fixtures/tiny.cjs");
 
-// Small hand-built network in data/mpls_graph.js format. nodes: [x, y, flags?, ctl?] in meters;
-// links: { a, b, dir = 1, kph = 36, lf = 1, lb = 0, flags = 0, sigA = -1, sigB = -1 }.
-function tiny(nodes, links, controllers = 0) {
-  const U = 10;
-  const raw = {
-    v: 1, label: "tiny", attribution: "test", bbox: [0, 0, 0, 0], size: [5000 * U, 5000 * U], unitsPerMeter: U,
-    classes: ["residential"], names: [""],
-    nodes: { x: nodes.map((n) => n[0] * U), y: nodes.map((n) => n[1] * U), flags: nodes.map((n) => n[2] || 0), ctl: nodes.map((n) => n[3] ?? -1) },
-    controllers: { axis: Array(controllers).fill(0) },
-    links: { a: [], b: [], dir: [], kph: [], lf: [], lb: [], cls: [], flags: [], name: [], sigA: [], sigB: [], len: [], way: [], shp: [] },
-    shapes: [],
-  };
-  for (const l of links) {
-    const L = raw.links;
-    L.a.push(l.a); L.b.push(l.b); L.dir.push(l.dir ?? 1); L.kph.push(l.kph ?? 36);
-    L.lf.push(l.lf ?? 1); L.lb.push(l.lb ?? 0); L.cls.push(0); L.flags.push(l.flags ?? 0); L.name.push(0);
-    L.sigA.push(l.sigA ?? -1); L.sigB.push(l.sigB ?? -1); L.len.push(0); L.way.push(1); L.shp.push(0);
-  }
-  return G.decodeMplsGraph(raw);
-}
 function world(g, sigOpts = {}) {
   const router = R.createRouter(g);
   const signals = T.createSignals(g, sigOpts);
@@ -158,6 +139,91 @@ function assertClean(motion, list) {
   console.log("PASS: multi-lane approaches, lane offsets, shuttle-only arcs refused to private cars, routes must start where the car is.");
 }
 
+// ------------------------------------------------------------ saturation flow at a green light (Phase 4)
+{
+  // A 200 m approach to a signal (red until t=33 s), then 30 m to the end. Residential class:
+  // 1,500 vehicles per hour per lane = one every 2.4 s, plus 2 s start-up lost time.
+  const run = (lanes) => {
+    const w = world(tiny([[0, 0], [200, 0, 2, 0], [230, 0]], [{ a: 0, b: 1, lf: lanes, sigB: 1 }, { a: 1, b: 2, lf: lanes }], 1), { offsets: [0] });
+    const cars = Array.from({ length: 12 }, (_, i) => vehicle("q" + i));
+    const r = routeOf(w, 0, 2);
+    for (const v of cars) { w.motion.place(v, 0); w.motion.setRoute(v, r); }
+    const done = [];
+    for (let t = 0; t < 33; t += 1) done.push(...w.motion.step(cars, t, 1));
+    assert.strictEqual(done.length, 0);
+    assert.strictEqual(cars.filter((v) => v.lane >= 0).length, 12, "all queued at the red");
+    for (let t = 33; t < 200 && done.length < 12; t += 3) { done.push(...w.motion.step(cars, t, 3)); assertClean(w.motion, cars); }
+    assert.strictEqual(done.length, 12);
+    return { w, times: done.map((v) => v.arrivedAt) };
+  };
+  const one = run(1), two = run(2);
+  const h = one.w.motion.headway[0];
+  assert.ok(Math.abs(h - 2.4) < 1e-9, "residential lane headway 2.4 s");
+  const travel = 30 / (36 / 3.6);
+  assert.ok(one.times[0] >= 33 + M.START_LOST + travel - 1e-6, `first car leaves after the start-up lost time (${one.times[0]})`);
+  for (let i = 1; i < 12; i++) assert.ok(one.times[i] - one.times[i - 1] >= h - 1e-6, "one car per headway per lane");
+  const spanOne = one.times[11] - one.times[0], spanTwo = two.times[11] - two.times[0];
+  assert.ok(Math.abs(spanOne - 11 * h) < 1e-6, `12 cars discharge in 11 headways (${spanOne.toFixed(2)} s)`);
+  assert.ok(spanTwo < spanOne * 0.6, `two lanes discharge about twice as fast (${spanTwo.toFixed(1)} vs ${spanOne.toFixed(1)} s)`);
+  console.log(`PASS: a 12-car queue leaves a green at saturation flow (${h} s per car per lane after ${M.START_LOST} s lost time); two lanes take ${spanTwo.toFixed(1)} s instead of ${spanOne.toFixed(1)} s.`);
+}
+
+// ------------------------------------------------------------ an agent that stands for several cars
+{
+  // A pcu-4 agent (one simulated car for four real ones) takes 4 × 8 m of lane and four
+  // saturation headways at the stop line, so it loads the road like the cars it represents.
+  const w = world(tiny([[0, 0], [200, 0, 2, 0], [230, 0]], [{ a: 0, b: 1, sigB: 1 }, { a: 1, b: 2 }], 1), { offsets: [0] });
+  const big = vehicle("big"), next = vehicle("next");
+  big.pcu = 4;
+  const r = routeOf(w, 0, 2);
+  w.motion.place(big, 0); w.motion.setRoute(big, r);
+  w.motion.step([big], 0, 1);
+  w.motion.place(next, 0); w.motion.setRoute(next, r);
+  const list = [big, next];
+  for (let t = 1; t < 33; t += 1) w.motion.step(list, t, 1);
+  assert.ok(Math.abs(big.s - 200) < 1e-9 && Math.abs(next.s - (200 - 32)) < 1e-9, `follower stops 32 m behind a pcu-4 agent (${next.s})`);
+  assertClean(w.motion, list);
+  const done = [];
+  for (let t = 33; t < 120 && done.length < 2; t += 1) done.push(...w.motion.step(list, t, 1));
+  const gapT = next.arrivedAt - big.arrivedAt;
+  assert.ok(gapT >= 4 * 2.4 - 1e-6, `the next car crosses four headways later (${gapT.toFixed(1)} s)`);
+  const back = w.motion.locate(big, 3.2, 24);
+  assert.ok(back, "trailing cars can be drawn behind the agent");
+  console.log(`PASS: a pcu-4 agent takes 32 m of lane and ${gapT.toFixed(1)} s of stop-line time, like the four cars it stands for.`);
+}
+
+// ------------------------------------------------------------ merges take turns; the box stays clear
+{
+  // Two one-lane approaches (from 0 and from 1) merge at node 2 into a single lane 2 -> 3 -> 4.
+  const w = world(tiny([[0, 0], [0, 200], [150, 100], [400, 100], [600, 100]],
+    [{ a: 0, b: 2 }, { a: 1, b: 2 }, { a: 2, b: 3 }, { a: 3, b: 4 }]));
+  const cars = [];
+  for (const from of [0, 1]) for (let i = 0; i < 25; i++) { const v = vehicle(`m${from}-${i}`); v.from = from; w.motion.place(v, from); w.motion.setRoute(v, routeOf(w, from, 4)); cars.push(v); }
+  const order = [];
+  for (let t = 0; t < 600 && order.length < 50; t += 3) { order.push(...w.motion.step(cars, t, 3).map((v) => v.from)); assertClean(w.motion, cars); }
+  assert.strictEqual(order.length, 50);
+  const firstHalf = order.slice(0, 25);
+  const share = firstHalf.filter((f) => f === 0).length / 25;
+  assert.ok(share > 0.3 && share < 0.7, `both approaches get through the merge in turn (${Math.round(share * 100)} % from one side in the first 25)`);
+
+  // Keep clear: a 10 m arc between two nodes is the inside of an intersection; with the street
+  // beyond it full, nobody stops inside it.
+  const k = world(tiny([[0, 0], [100, 0], [110, 0], [190, 0], [300, 0]],
+    [{ a: 0, b: 1 }, { a: 1, b: 2 }, { a: 2, b: 3 }, { a: 3, b: 4 }]));
+  const box = arcOf(k.router, 1, 2), beyond = arcOf(k.router, 3, 4);
+  k.motion.setClosed(beyond, true);
+  const queue = Array.from({ length: 30 }, (_, i) => vehicle("k" + i));
+  for (const v of queue) { k.motion.place(v, 0); k.motion.setRoute(v, routeOf(k, 0, 4)); }
+  for (let t = 0; t < 400; t += 3) {
+    k.motion.step(queue, t, 3);
+    assertClean(k.motion, queue);
+    if (k.motion.occupancy[arcOf(k.router, 2, 3)] >= 10) assert.strictEqual(k.motion.occupancy[box], 0, "box stays empty once the street beyond is full");
+  }
+  assert.strictEqual(k.motion.occupancy[arcOf(k.router, 2, 3)], 11, "street beyond fills (80 m at 8 m spacing)");
+  assert.ok(k.motion.occupancy[arcOf(k.router, 0, 1)] >= 12, "the queue waits before the box");
+  console.log(`PASS: two approaches share a merge (${Math.round(share * 100)} / ${Math.round((1 - share) * 100)}), and nobody waits inside a short intersection arc when the street beyond is full.`);
+}
+
 // ------------------------------------------------------------ random stress on a signalized synthetic grid
 {
   const g = G.decodeMplsGraph(makeSynthGrid({ cols: 16, rows: 12, seed: 5 }));
@@ -267,22 +333,37 @@ function assertClean(motion, list) {
   assert.ok(trips > 600, `trips completed on the real network (${trips})`);
   const perStep = ms / steps;
   assert.ok(perStep < 3, `motion step for 400 vehicles took ${perStep.toFixed(2)} ms`);
-  // Dense traffic: 3,000 more private cars join the 400 above. Nobody waits in a queue for more than 5 minutes (no
-  // gridlock), and lane bookkeeping survives heavy multi-lane merging.
+  // Dense traffic: 3,000 more private cars join the 400 above, all on free-flow routes, which
+  // oversaturates the freeway ramps (lane capacity is real now). Queues are allowed; deadlock is
+  // not: after 20 minutes no new trips are handed out and everything still on the road must
+  // drain, and no car may sit on one arc for more than 20 minutes on the way.
   const dense = fleet.slice();
   for (let i = 0; i < 3000; i++) { const v = vehicle("d" + i); w.motion.place(v, pick()); assign(v); dense.push(v); }
-  let denseTrips = 0, worstQueue = 0, denseMs = 0;
-  for (let t = 1800; t < 3000; t += 3) {
+  let denseTrips = 0, denseMs = 0, worstArc = 0, t = 1800;
+  const watch = (v) => {
+    const a = v.lane >= 0 ? v.route[v.ri] : -1;
+    if (a !== v.watchArc) { v.watchArc = a; v.watchSince = t; }
+    else if (a >= 0 && t - v.watchSince > worstArc) worstArc = t - v.watchSince;
+  };
+  for (; t < 3000; t += 3) {
     const t0 = process.hrtime.bigint();
     const done = w.motion.step(dense, t, 3);
     denseMs += Number(process.hrtime.bigint() - t0) / 1e6;
     for (const v of done) { denseTrips++; if (v.id[0] !== "x") assign(v); }
-    for (const v of dense) { v.queued = v.route && v.waiting === "queue" ? (v.queued || 0) + 3 : 0; if (v.queued > worstQueue) worstQueue = v.queued; }
+    for (const v of dense) watch(v);
     if (t % 120 === 0) assertClean(w.motion, dense);
   }
-  assert.ok(worstQueue < 300, `a car queued for ${worstQueue} s (gridlock)`);
-  console.log(`PASS: real network, 3,400 vehicles for 20 more min: ${denseTrips} trips, longest continuous queue wait ${worstQueue} s, ` +
-    `${(denseMs / 400).toFixed(2)} ms per step.`);
+  let left = dense.filter((v) => v.route).length;
+  const drainStart = t;
+  for (; left && t < drainStart + 3600; t += 3) {
+    left -= w.motion.step(dense, t, 3).length;
+    for (const v of dense) watch(v);
+  }
+  assertClean(w.motion, dense);
+  assert.strictEqual(left, 0, `${left} vehicles never drained (deadlock)`);
+  assert.ok(worstArc < 1200, `a car sat on one arc for ${worstArc} s`);
+  console.log(`PASS: real network, 3,400 vehicles for 20 more min: ${denseTrips} trips, ${(denseMs / 400).toFixed(2)} ms per step; ` +
+    `oversaturated ramps queue (longest stay on one arc ${Math.round(worstArc / 60)} min) and all drain in ${Math.round((t - drainStart) / 60)} min.`);
   console.log(`PASS: real network — core ${core.size} of ${core.interior} intersections (${(outside * 100).toFixed(1)} % only reachable via the outside), ` +
     `${through.length} freeway through-routes, 400 vehicles for 30 min: ${trips} trips + ${throughDone} through-trips, ` +
     `${perStep.toFixed(2)} ms per 3 s step.`);

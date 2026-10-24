@@ -178,12 +178,46 @@ Split into four steps so each lands green on its own.
   on a phone: at a typical 4–5× slower mid-range phone that is roughly 50–70 ms of the 100 ms
   frame, so the exit target looks reachable but is unverified.
 
-### Phase 4 — Capacity and congestion
-- Per-link capacity from lanes × class saturation flow; queues spill back across links; signal
-  approaches discharge at saturation flow during green.
-- Congestion cost moves from "claims on an edge" to a volume/capacity (BPR-style) delay.
-- Chokepoint panel: river bridges, freeway ramps and portals with live load and queue length.
-- Exit: congestion forms and clears plausibly at known pinch points in a seeded AM peak.
+### Phase 4 — Capacity and congestion ✅
+- Per-lane capacity from OSM lanes × road-class saturation flow (2,100 cars/h/lane on freeways
+  down to 1,200 on service roads), × the green share (30 of 66 s) at signals
+  (`src/motion.js` `SAT_FLOW`, `src/congestion.js`).
+- Stop lines discharge at saturation flow: one car per headway per lane (2.4 s on a residential
+  street), with 2 s start-up lost time for the first car away from a red. A car now waits for
+  green inside its 3 s step instead of until the next step.
+- Queues spill back across links (3c). New in 4: **merges take turns** (the lane or curb that has
+  waited longest to join an arc holds a claim; without it a freeway lane starved for 50 minutes
+  behind a busier one), and **keep clear** (no stopping inside arcs shorter than 25 m, the
+  insides of intersections, unless there is room beyond). Together they keep oversaturated
+  traffic from locking up: 3,400 cars on free-flow routes queue heavily at the freeway ramps
+  but all drain.
+- Sampled private traffic: each private car on the map stands for 4 real cars (`pcu`), taking
+  4 × 8 m of lane and 4 headways at stop lines and drawn as 4 cars nose to tail. Demand is in
+  real cars: 5,000 an hour across the map edge off-peak, 14,500 at 08:00 (AM commuters to jobs
+  and schools who leave between 16:15 and 18:45, visitors, freeway through-traffic), entering and
+  leaving in proportion to the edge road's capacity. Parked cars leave the active list.
+- Congestion cost replaces route claims: per arc, inflow smoothed over 5 min and cars queued,
+  turned into extra delay = BPR (free time × 0.15 × (v/c)⁴) + queued cars beyond one green ÷
+  discharge rate; under 6 s counts as zero. Routes search around congestion only when the
+  free-flow route would lose more than 20 s and 10 % of its time, so most routing stays on the
+  cached trees. Drivers stuck in a queue for a minute with congestion still ahead look for a
+  faster way (four per step, at most every two minutes each).
+- Chokepoint panel and map: all eight Mississippi road bridges (Plymouth, Hennepin, 3rd Ave,
+  I-35W, 10th Ave, Washington Ave, I-94 Dartmouth, Franklin), the four busiest of 75 freeway
+  ramps and of 173 map-edge entries, each with flow (cars/h), share of capacity and queue; tap to
+  find it on the map. A congestion layer draws slow (amber) and jammed (red, ≥ 1 min) directions.
+- Tests: `node tests/congestion.test.cjs` (capacities; an overloaded signal approach builds 91 s
+  of delay; congestion-aware routing diverts 49 % and cuts the queue from 151 to 19 cars, then
+  clears; the eight bridges resolve in both directions; the seeded AM peak below) plus motion
+  tests for saturation flow, start-up lost time, pcu agents, merge turns and keep-clear.
+- Result (seed 1): the worst queue, 121 cars, forms at 08:05 at the I-35W exit to Southeast
+  11th Avenue / University Avenue (the UMN exits), backing onto the I-35W bridge, which carries
+  up to 5,200 cars/h; East Hennepin and the 10th Ave Bridge approach also queue. Network queueing
+  falls from 178 cars in the rush to 20 after 10:00, chokepoint queues to ≤ 10 cars, congested
+  segments from 34 to 1; 124 reroutes. Simulation cost at the peak (≈ 700 agents on the road
+  standing for 2,200 private cars plus the fleet): about 11 ms per 20× frame in Node and 22 ms in
+  desktop Chrome, roughly double Phase 3d. When a frame overruns, playback slows rather than
+  skipping steps.
 
 ### Phase 5 — Demand model (`tools/build_demand.py` → `data/mpls_demand.js`)
 - Zones: census blocks (or block groups) clipped to the box, each snapped to nearby street nodes.
@@ -249,4 +283,5 @@ Split into four steps so each lands green on its own.
 | 3b | done | Signal timing and stop-sign holds. |
 | 3c | done | `src/motion.js`: lanes, 8 m following across links, signals, stop signs, closures; connected core. 400 vehicles 0.08 ms/step. |
 | 3d | done | `index.html` runs the ported engine (`src/sim.js`) on real streets; source app kept at `source/index.html`; map layer shared as `src/mapview.js`. Peak 476 vehicles on the road; 20× frame ≈ 12 ms sim in desktop Chrome. Phone timing still to measure on a device. |
-| 4–9 | not started | |
+| 4 | done | Saturation flow, merge turns, keep-clear, pcu-4 private agents with real-scale demand, BPR + queue delay routing and en-route diversion, chokepoint panel and congestion layer. AM peak: 121-car queue at the I-35W UMN exits at 08:05, cleared by 10:00. ≈ 22 ms per 20× frame in desktop Chrome at the peak. |
+| 5–9 | not started | |

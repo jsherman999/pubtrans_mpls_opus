@@ -9,7 +9,7 @@
     --bg: #eef2f5;
     --street: #b4bcc6;
     --arterial: #6b7684;
-    --motorway: #c9a066;
+    --motorway: #95a1b2;
     --psv: #0f8b80;
     --signal: #d63b3b;
     --portal: #7c4dcc;
@@ -24,8 +24,8 @@
     --sedan: #0d9488; --shuttle: #ea580c; --bus: #7c3aed; --private: #5f7d1b;
     --police: #0369a1; --fire: #e11d48; --recovery: #475569;
     --employer: #2f6fb0; --grocery: #4d8b31; --school: #b58900; --station: #b91c1c; --residential: #8a6f9e;
-    --waiting: #d97706; --depot: #1d2733; --closure: #dc2626;
-    --go: #16a34a; --amber: #d97706;
+    --waiting: #c026d3; --depot: #1d2733; --closure: #111827; --jam: #dc2626;
+    --go: #16a34a; --amber: #f59e0b;
     --series-1: #2a78d6; --series-2: #eb6834;
     color-scheme: light;
   }
@@ -34,7 +34,7 @@
       --bg: #141c26;
       --street: #4b5664;
       --arterial: #8d97a3;
-      --motorway: #b08850;
+      --motorway: #6f7b8c;
       --psv: #3fb6a8;
       --signal: #ef5b5b;
       --portal: #b18cf2;
@@ -49,7 +49,7 @@
       --sedan: #2dd4bf; --shuttle: #fb923c; --bus: #a78bfa; --private: #a3e635;
       --police: #38bdf8; --fire: #fb7185; --recovery: #e2e8f0;
       --employer: #60a5fa; --grocery: #86c45a; --school: #facc15; --station: #f87171; --residential: #c4a5d8;
-      --waiting: #fbbf24; --depot: #e6e9ee; --closure: #f87171;
+      --waiting: #e879f9; --depot: #e6e9ee; --closure: #f8fafc; --jam: #ef4444;
       --go: #4ade80; --amber: #fbbf24;
       --series-1: #3987e5; --series-2: #d95926;
       color-scheme: dark;
@@ -110,6 +110,16 @@
   #log div:last-child { border-bottom: 0; }
   #log b { font-weight: 600; margin-right: 6px; }
   #log time { color: var(--muted); margin-right: 6px; }
+  #choke h3 { font-size: 12.5px; font-weight: 650; margin: 10px 0 4px; }
+  #choke button { display: block; width: 100%; text-align: left; border: 0; border-radius: 6px; padding: 4px 6px; margin: 0 -6px; width: calc(100% + 12px); }
+  #choke button:hover { background: var(--panel-edge); }
+  #choke .name { display: flex; justify-content: space-between; gap: 8px; }
+  #choke .name span:last-child { white-space: nowrap; }
+  #choke .meta { display: block; color: var(--muted); font-size: 12px; }
+  #choke .bar { display: block; height: 4px; border-radius: 2px; background: var(--panel-edge); margin-top: 3px; overflow: hidden; }
+  #choke .bar span { display: block; height: 100%; border-radius: 2px; background: var(--muted); }
+  #choke .bar span.slow { background: var(--amber); }
+  #choke .bar span.jam { background: var(--jam); }
 
   #info { display: none; left: calc(12px + env(safe-area-inset-left, 0px)); bottom: calc(40px + env(safe-area-inset-bottom, 0px));
     width: min(320px, calc(100vw - 24px)); padding: 10px 12px; }
@@ -174,8 +184,9 @@
   <div class="row"><span title="Running mean request-to-boarding wait, including riders still waiting">Avg wait</span><span id="hWait" class="num">—</span></div>
   <div class="row"><span>Fleet busy / idle</span><span id="hFleet" class="num">—</span></div>
   <div class="row"><span>Vehicles on the road</span><span id="hRoad" class="num">—</span></div>
-  <div class="row"><span>Private · freeway through</span><span id="hPrivate" class="num">—</span></div>
+  <div class="row"><span title="Real cars: each private car on the map stands for several">Private cars on the road</span><span id="hPrivate" class="num">—</span></div>
   <div class="row"><span>Queued behind traffic · at signals</span><span id="hTraffic" class="num">—</span></div>
+  <div class="row"><span title="Street segments where congestion adds at least 6 s to the expected travel time">Congested segments · reroutes</span><span id="hCongestion" class="num">—</span></div>
   <div class="row"><span>Emergencies</span><span id="hEmergency" class="num">None</span></div>
   <div class="row"><span title="Main-thread time per frame: simulation steps plus drawing">Frame time</span><span id="hPerf" class="num">—</span></div>
 
@@ -185,13 +196,19 @@
     <canvas id="chartQueued" aria-label="Ride requests not yet assigned a vehicle, last 4 simulated hours"></canvas></div>
   <div id="chartTip" class="num" aria-live="off"></div>
 
+  <h2>Chokepoints</h2>
+  <label class="row" style="justify-content:flex-start;gap:8px"><input type="checkbox" id="congestionLayer" checked> Show congestion on the map</label>
+  <div id="choke"></div>
+  <p class="hint">Flows are real cars per hour (smoothed over five minutes), share of capacity for the busier direction, and cars queued on and just before the chokepoint.</p>
+
   <h2>Fleet &amp; demand</h2>
   <div class="stepper"><span>Population</span><span class="ctl"><button data-step="population" data-by="-250" aria-label="Fewer residents">−</button><span id="sPop" class="num"></span><button data-step="population" data-by="250" aria-label="More residents">+</button></span></div>
   <div class="stepper"><span><span class="sw" style="background:var(--sedan)"></span>Sedans (4 seats)</span><span class="ctl"><button data-step="sedan" data-by="-5" aria-label="Fewer sedans">−</button><span id="sSedan" class="num"></span><button data-step="sedan" data-by="5" aria-label="More sedans">+</button></span></div>
   <div class="stepper"><span><span class="sw" style="background:var(--shuttle)"></span>Shuttles (8)</span><span class="ctl"><button data-step="shuttle" data-by="-5" aria-label="Fewer shuttles">−</button><span id="sShuttle" class="num"></span><button data-step="shuttle" data-by="5" aria-label="More shuttles">+</button></span></div>
   <div class="stepper"><span><span class="sw" style="background:var(--bus)"></span>Buses (20)</span><span class="ctl"><button data-step="bus" data-by="-2" aria-label="Fewer buses">−</button><span id="sBus" class="num"></span><button data-step="bus" data-by="2" aria-label="More buses">+</button></span></div>
   <div class="slider"><label for="privateTraffic">Private traffic</label><span id="privateVal" class="num"></span>
-    <input type="range" id="privateTraffic" min="0" max="10" step="0.5"></div>
+    <input type="range" id="privateTraffic" min="0" max="3" step="0.25"></div>
+  <p class="hint" id="privateHint"></p>
   <div class="slider"><label for="rideSharing">Ride sharing</label><span id="sharingVal" class="num"></span>
     <input type="range" id="rideSharing" min="0" max="100" step="10"></div>
   <p class="hint" id="sharingHint"></p>
@@ -219,6 +236,8 @@
     <span><span class="sw" style="background:var(--depot)"></span>Depot (P)</span>
     <span><span class="sw" style="background:var(--psv)"></span>Shuttle-only street</span>
     <span><span class="sw" style="background:var(--closure)"></span>Closed direction</span>
+    <span><span class="sw" style="background:var(--amber)"></span>Slow (adds under 1 min)</span>
+    <span><span class="sw" style="background:var(--jam)"></span>Jammed (adds 1 min or more)</span>
   </div>
   <p class="hint">Zoom in for signals (green/red per approach), stop signs, one-way arrows and roads that continue off the map.
     <a href="viewer.html">Street viewer</a> · <a href="source/index.html">Original grid app</a></p>
@@ -238,6 +257,7 @@
 <script src="src/routing.js"></script>
 <script src="src/traffic.js"></script>
 <script src="src/motion.js"></script>
+<script src="src/congestion.js"></script>
 <script src="src/sim.js"></script>
 <script src="src/mapview.js"></script>
 <script>
@@ -269,6 +289,7 @@ if (!window.MPLS_GRAPH) {
 
 function start(graph) {
   const sim = MplsSim.createSim(graph, { seed: 1 });
+  const D = MplsSim.DEFAULTS;
   const $ = (id) => document.getElementById(id);
   const panel = $("panel");
   const phone = () => matchMedia("(max-width: 760px)").matches;
@@ -278,7 +299,7 @@ function start(graph) {
   const map = MplsMapView.createMapView({
     canvas: $("map"), graph,
     themeKeys: ["sedan", "shuttle", "bus", "private", "police", "fire", "recovery", "employer", "grocery", "school",
-      "station", "residential", "waiting", "depot", "closure", "go", "amber", "muted", "panel-solid"],
+      "station", "residential", "waiting", "depot", "closure", "go", "amber", "jam", "muted", "panel-solid"],
     padding: () => phone() ? { left: 0, right: 0, top: 64, bottom: 64 } : { left: 0, right: panel.offsetWidth || 0, top: 56, bottom: 0 },
     overlay: drawOverlay,
     drawSignals,
@@ -325,6 +346,8 @@ function start(graph) {
     const S = sim.state, s = view.scale, b = map.bounds;
     const inView = (x, y) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1;
     const sx = (x) => x * s + view.ox, sy = (y) => y * s + view.oy;
+
+    drawCongestion(ctx);
 
     // Closures: a red bar across the closed direction, near its end.
     ctx.lineCap = "butt";
@@ -397,7 +420,8 @@ function start(graph) {
       }
     }
 
-    // Vehicles: one path per colour. Dots when zoomed out, scaled shapes up close.
+    // Vehicles: one path per colour. Dots when zoomed out, scaled shapes up close, where a
+    // private car that stands for several real cars draws all of them nose to tail.
     drawn = [];
     const byColor = new Map();
     for (const v of S.vehicles) {
@@ -419,15 +443,11 @@ function start(graph) {
         const v = list[i], p = list[i + 1], x = sx(p.x), y = sy(p.y);
         if (!shapes) { const r = (s < 0.3 ? 1.6 : s < 0.5 ? 2.4 : 3) * (faint ? 0.8 : 1); ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, Math.PI * 2); continue; }
         const [L, W] = VEHICLE_SIZE[v.kind] || [5, 2];
-        const hl = Math.max(3, L * s / 2), hw = Math.max(1.5, W * s / 2);
-        const ca = Math.cos(p.heading), sa = Math.sin(p.heading);
-        // Rectangle centred behind the position (the position is the vehicle's front).
-        const cx = x - ca * hl, cy = y - sa * hl;
-        ctx.moveTo(cx + ca * hl - sa * hw, cy + sa * hl + ca * hw);
-        ctx.lineTo(cx + ca * hl + sa * hw, cy + sa * hl - ca * hw);
-        ctx.lineTo(cx - ca * hl + sa * hw, cy - sa * hl - ca * hw);
-        ctx.lineTo(cx - ca * hl - sa * hw, cy - sa * hl + ca * hw);
-        ctx.closePath();
+        rect(ctx, x, y, p.heading, L, W);
+        for (let j = 1; j < Math.round(v.pcu || 1); j++) {
+          const q = sim.motion.locate(v, 3.2, j * sim.motion.gap);
+          if (q) rect(ctx, sx(q.x), sy(q.y), q.heading, L, W);
+        }
       }
       ctx.globalAlpha = faint ? 0.6 : 1;
       ctx.fillStyle = theme[c]; ctx.fill();
@@ -442,6 +462,48 @@ function start(graph) {
       ctx.beginPath(); ctx.arc(sx(selected.x), sy(selected.y), 11, 0, Math.PI * 2);
       ctx.strokeStyle = theme.select; ctx.lineWidth = 2.5; ctx.stroke();
     }
+  }
+  // Vehicle rectangle of length L and width W (meters) whose front is at screen point (x, y).
+  function rect(ctx, x, y, heading, L, W) {
+    const s = view.scale;
+    const hl = Math.max(3, L * s / 2), hw = Math.max(1.5, W * s / 2);
+    const ca = Math.cos(heading), sa = Math.sin(heading);
+    const cx = x - ca * hl, cy = y - sa * hl;
+    ctx.moveTo(cx + ca * hl - sa * hw, cy + sa * hl + ca * hw);
+    ctx.lineTo(cx + ca * hl + sa * hw, cy + sa * hl - ca * hw);
+    ctx.lineTo(cx - ca * hl + sa * hw, cy - sa * hl - ca * hw);
+    ctx.lineTo(cx - ca * hl - sa * hw, cy - sa * hl + ca * hw);
+    ctx.closePath();
+  }
+  // Congestion: each delayed direction drawn alongside its street, on the right of travel.
+  let showCongestion = true;
+  function drawCongestion(ctx) {
+    const cong = sim.congestion, s = view.scale, b = map.bounds;
+    if (!showCongestion || !cong.congestedArcs) return;
+    const paths = { amber: [], jam: [] };
+    for (let a = 0; a < cong.extra.length; a++) if (cong.extra[a] > 0) {
+      const l = sim.router.arcs[a].link, bb = l.bbox;
+      if (bb[2] < b.x0 || bb[0] > b.x1 || bb[3] < b.y0 || bb[1] > b.y1) continue;
+      paths[cong.extra[a] >= 60 ? "jam" : "amber"].push(a);
+    }
+    ctx.lineCap = "butt";
+    for (const [key, list] of Object.entries(paths)) {
+      if (!list.length) continue;
+      ctx.beginPath();
+      for (const a of list) {
+        const arc = sim.router.arcs[a], p = arc.link.pts, n = p.length / 2;
+        const off = Math.max(2.5, map.widthFor(arc.link.style) * 0.5 + 1.5);
+        for (let k = 0; k < n - 1; k++) {
+          const i = arc.forward ? k : n - 1 - k, j = arc.forward ? k + 1 : n - 2 - k;
+          const x0 = p[i * 2] * s + view.ox, y0 = p[i * 2 + 1] * s + view.oy, x1 = p[j * 2] * s + view.ox, y1 = p[j * 2 + 1] * s + view.oy;
+          const len = Math.hypot(x1 - x0, y1 - y0) || 1, nx = -(y1 - y0) / len * off, ny = (x1 - x0) / len * off;
+          ctx.moveTo(x0 + nx, y0 + ny); ctx.lineTo(x1 + nx, y1 + ny);
+        }
+      }
+      ctx.strokeStyle = theme[key]; ctx.lineWidth = Math.max(2.5, Math.min(6, 3 * s)); ctx.globalAlpha = 0.9;
+      ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    ctx.lineCap = "round";
   }
   function badge(ctx, x, y, text, color) {
     ctx.font = `700 11px "Avenir Next", "Segoe UI", system-ui, sans-serif`;
@@ -547,6 +609,7 @@ function start(graph) {
   $("privateTraffic").value = sim.settings.privateTraffic;
   $("rideSharing").value = sim.settings.rideSharing;
   $("privateTraffic").addEventListener("input", (e) => { sim.setPrivateTraffic(Number(e.target.value)); refresh(); });
+  $("congestionLayer").addEventListener("change", (e) => { showCongestion = e.target.checked; map.requestDraw(); });
   $("rideSharing").addEventListener("input", (e) => { sim.setRideSharing(Number(e.target.value)); refresh(); });
   $("logPause").addEventListener("click", () => { logPaused = !logPaused; $("logPause").setAttribute("aria-pressed", String(logPaused)); $("logPause").textContent = logPaused ? "Resume log" : "Pause log"; });
   $("sheetToggle").addEventListener("click", () => {
@@ -573,7 +636,8 @@ function start(graph) {
     $("hWait").textContent = fmtMin(sim.averageQueueMinutes());
     $("hFleet").textContent = `${c.fleetBusy} / ${c.fleetIdle}`;
     $("hRoad").textContent = c.onRoad.toLocaleString();
-    $("hPrivate").textContent = `${c.private} · ${c.through}`;
+    $("hPrivate").textContent = `${c.privateCars.toLocaleString()} (${c.through} through)`;
+    $("hCongestion").textContent = `${sim.congestion.congestedArcs} · ${S.reroutes}`;
     $("hTraffic").textContent = `${c.queued} · ${c.atSignal}`;
     $("hEmergency").textContent = S.incidents.length ? S.incidents.map((i) => `${i.kind} at ${i.target.name}`).join("; ") : "None";
     $("sPop").textContent = sim.settings.population.toLocaleString();
@@ -581,6 +645,13 @@ function start(graph) {
     $("sShuttle").textContent = sim.countFleet("shuttle");
     $("sBus").textContent = sim.countFleet("bus");
     $("privateVal").textContent = sim.settings.privateTraffic + "×";
+    const k = sim.settings.privateTraffic;
+    $("privateHint").textContent = k
+      ? `About ${Math.round(k * (D.localPerHour + D.throughPerHour)).toLocaleString()} cars an hour cross the map edge off-peak and ` +
+        `${Math.round(k * (D.localPerHour * (1 + D.amPeak) + D.throughPerHour * (1 + D.throughPeak))).toLocaleString()} at 08:00 (commuters, visitors, freeway ` +
+        `through-traffic). Each private car on the map stands for ${D.trafficScale} and takes their road space.`
+      : "No private traffic: shuttles only.";
+    renderChokepoints();
     $("sharingVal").textContent = sim.settings.rideSharing + "%";
     $("sharingHint").textContent = sim.settings.rideSharing
       ? `Shuttles and buses add waiting riders along their way, up to ${4 * sim.settings.rideSharing} m of extra driving per trip; existing stops keep their order.`
@@ -602,6 +673,32 @@ function start(graph) {
     }
     renderInfo();
     drawCharts();
+  }
+  // Chokepoint list: every river bridge, then the most loaded ramps and map-edge entries.
+  function renderChokepoints() {
+    const box = $("choke"), c = sim.chokepoints(4);
+    box.replaceChildren();
+    for (const [title, list] of [["River bridges", c.bridges], ["Busiest freeway ramps", c.ramps], ["Busiest entries at the map edge", c.portals]]) {
+      const h = document.createElement("h3"); h.textContent = title; box.append(h);
+      for (const x of list) {
+        const b = document.createElement("button");
+        const name = document.createElement("span"); name.className = "name";
+        const n = document.createElement("span"); n.textContent = x.name;
+        const q = document.createElement("span"); q.className = "num"; q.textContent = x.queue ? `queue ${Math.round(x.queue)}` : "";
+        name.append(n, q);
+        const meta = document.createElement("span"); meta.className = "meta num";
+        meta.textContent = `${Math.round(x.flow).toLocaleString()} cars/h · ${Math.round(x.vc * 100)} % of capacity`;
+        const bar = document.createElement("span"); bar.className = "bar";
+        const fill = document.createElement("span");
+        fill.style.width = `${Math.min(100, x.vc * 100)}%`;
+        fill.className = x.vc >= 1 ? "jam" : x.vc >= 0.85 ? "slow" : "";
+        bar.append(fill);
+        b.append(name, meta, bar);
+        b.setAttribute("aria-label", `${x.name}: ${meta.textContent}${x.queue ? `, ${Math.round(x.queue)} cars queued` : ""}. Show on map.`);
+        b.addEventListener("click", () => { select(null); map.centerOn(x.x, x.y, Math.max(view.scale, 1.2)); });
+        box.append(b);
+      }
+    }
   }
   const clockOf = (minute) => { const m = Math.floor(minute); return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
 

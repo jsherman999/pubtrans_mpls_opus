@@ -235,7 +235,9 @@ function trackRequests(sim, all) {
   const onArc = new Set(S.vehicles.filter((v) => v.lane >= 0 && v.route[v.ri] === closedArc).map((v) => v.id));
   while (S.closures.size) {
     sim.step();
-    for (const v of S.vehicles) if (v.lane >= 0 && v.route[v.ri] === closedArc && !onArc.has(v.id) && v.passTag !== inc.id) entered.push(v.id);
+    // (The step that lifts the closure reopens the arc before anyone moves.)
+    if (S.closures.has(closedArc))
+      for (const v of S.vehicles) if (v.lane >= 0 && v.route[v.ri] === closedArc && !onArc.has(v.id) && v.passTag !== inc.id) entered.push(v.id);
     for (const v of S.vehicles) if (v.lane >= 0 && v.route[v.ri] === closedArc) onArc.add(v.id);
     assertClean(sim);
   }
@@ -286,7 +288,7 @@ function trackRequests(sim, all) {
     const before = new Set(S.vehicles);
     sim.step();
     for (const v of S.vehicles) if (!seen.has(v)) seen.set(v, { start: v.node, through: !!v.through });
-    for (const v of before) if (!S.vehicles.includes(v)) {
+    for (const v of before) if (!S.vehicles.includes(v) && v.removed) {
       const info = seen.get(v);
       assert.ok(isPortal(v.node), `${v.id} left the map at a portal`);
       if (info.through) { assert.ok(exits.has(v.node), "through-traffic leaves on a freeway"); throughDone++; }
@@ -294,10 +296,9 @@ function trackRequests(sim, all) {
     }
     if (i % 100 === 0) assertClean(sim);
   }
-  for (const [v, info] of seen) {
-    assert.ok(isPortal(info.start), "private traffic enters at a portal");
-    if (!info.through && v.state === "private_parked") assert.ok(sim.core.inCore[v.node], "visitors park in the core");
-  }
+  for (const [, info] of seen) assert.ok(isPortal(info.start), "private traffic enters at a portal");
+  assert.ok(S.parked.length > 0 && S.parked.every((v) => v.state === "private_parked" && sim.core.inCore[v.node]), "visitors park in the core");
+  for (let i = 1; i < S.parked.length; i++) assert.ok(S.parked[i - 1].departAt <= S.parked[i].departAt, "parked cars queue by departure time");
   assert.ok(throughDone > 300 && localDone > 20, `through ${throughDone}, local round trips ${localDone}`);
   sim.setPrivateTraffic(0);
   const n = S.vehicles.length;
