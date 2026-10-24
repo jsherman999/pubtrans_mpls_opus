@@ -89,6 +89,13 @@ way as the simulation's panel (the **Info & key** tab, a swipe from the right ed
 
 ![The street map viewer](docs/img/viewer.jpg)
 
+<img src="docs/img/viewer-phone.jpg" width="260" alt="The street viewer on a phone planning a downtown trip: the shuttle runs straight up the 2nd Avenue South bus contraflow lane in 3.2 minutes while the private car takes a parallel street in 3.9 minutes"> <img src="docs/img/viewer-phone-info.jpg" width="260" alt="The viewer's info page after swiping left: the area name and street counts, the map key, a tip on tapping streets and planning routes, and links to the other pages">
+
+On a phone the original grid app scrolls through its maps, and a swipe left anywhere on them
+brings in its controls, live state, live-metrics graph and debug stream:
+
+<img src="docs/img/grid-phone.jpg" width="260" alt="The original grid app on a phone: the regional network and the 15-minute city center maps, with the Controls and stats tab on the right edge"> <img src="docs/img/grid-phone-controls.jpg" width="260" alt="The grid app's controls page: gridlock bars, the live-metrics graph of queue wait and queued requests, and the debug stream">
+
 ## Results: how big a fleet?
 
 A Wednesday morning, 05:30–10:00, a tenth of today's car trips moved to SDEVs, simulated at

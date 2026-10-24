@@ -65,7 +65,8 @@ const PAGES = ["index.html", "viewer.html", "source/index.html"];
   }
   const readme = read("README.md");
   for (const credit of ["OpenStreetMap", "Open Database License", "2020 Census", "LODES"]) assert.ok(readme.includes(credit), `README credits ${credit}`);
-  for (const img of ["docs/img/sim.jpg", "docs/img/pov.jpg", "docs/img/viewer.jpg", "docs/img/phone.jpg"]) assert.ok(readme.includes(img), `README shows ${img}`);
+  for (const img of ["docs/img/sim.jpg", "docs/img/pov.jpg", "docs/img/viewer.jpg", "docs/img/phone.jpg", "docs/img/phone-panel.jpg",
+    "docs/img/viewer-phone.jpg", "docs/img/viewer-phone-info.jpg", "docs/img/grid-phone.jpg", "docs/img/grid-phone-controls.jpg"]) assert.ok(readme.includes(img), `README shows ${img}`);
   console.log(`PASS: ${links} local links in ${DOCS.length} documents resolve; README carries the screenshots and data credits.`);
 }
 
