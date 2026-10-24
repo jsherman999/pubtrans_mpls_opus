@@ -318,17 +318,47 @@ Split into four steps so each lands green on its own.
 - Tests: `node tests/fleet.test.cjs` (grid search vs full scan, pooling on/off and compact pools,
   transit and car-share levers, depots, battery use/charging/dispatch cut-off, rebalancing, AM
   peak speed, a two-size sweep that picks the default).
+- Open issue found after Phase 6 (to fix before trusting fleet sizes): the 19,000-vehicle answer
+  is inflated. At 08:30, 76,000 people an hour request rides but moving vehicles carry only 0.4
+  (06:00) to 2.6 (09:30) riders on average and 30–60 % of fleet distance is empty. Causes:
+  (1) at 1:20 each rider agent shares only with other agents, so pooling sees a request field
+  20× sparser than the real one — 20 people with the same trip ride 20 vehicles; (2) pools need
+  both ends in the same 600 m area; (3) rebalancing moves many empty vehicles before the rush;
+  (4) the fleet then congests the streets. Fix: let a rider agent fill a vehicle agent's seats
+  in proportion (occupancy per real vehicle), widen pooling corridors, damp rebalancing.
 - **Exit:** AM peak 07:00–10:00 at 1:20 with the 19,000-vehicle fleet: 17.6 ms average (p95
   21.5 ms) per 10 steps in Node; in desktop Chrome at 08:15, 16.8 ms of simulation per 10×
   frame and 21 ms with drawing, a fifth of the 100 ms budget, so ≥ 10× holds with room (20× is
   about 40 ms). The sweep finds the 15-minute fleet (19,000).
 
-### Phase 7 — Buildings and Driver POV (`tools/build_buildings.py` → `data/mpls_buildings.js`)
-- OSM footprints with `height` / `building:levels`; simplified, clipped, quantized.
-- Top-down footprints at higher zoom; POV extrudes footprints with distance culling and LOD.
-- Hand-built designs only for landmarks (U.S. Bank Stadium, IDS Center, Target Center,
-  Northrop, Coffman Union, Huntington Bank Stadium).
-- Exit: POV holds frame rate on a phone downtown.
+### Phase 7 — Buildings and Driver POV (`tools/build_buildings.py` → `data/mpls_buildings.js`) ✅
+- Footprints: `python3 tools/build_buildings.py --fetch` (Overpass: buildings, building parts,
+  stadiums) → 10,680 buildings, 66,352 points after 0.6 m simplification, 559 KB, loaded after the
+  page starts. Heights: 131 from `height`, 1,852 from levels, 8,697 by kind (house 7 m,
+  apartments 13 m, office 20 m…); OSM building parts replace their outlines (171), so towers
+  mapped as parts (IDS 241 m, Capella 237 m, Wells Fargo 236 m…) stand at their height.
+- Map: footprints from 0.5 px/m, shaded by height (under 15 m, under 40 m, taller) with
+  landmarks accented, one path per shade.
+- Driver POV (`src/pov.js`): **Ride along** in a vehicle's details opens a driver's-seat view
+  (eye 1.3 m in a sedan, 2.0 m in a shuttle, 2.6 m in a bus), interpolated between simulation
+  steps so it moves smoothly at any speed. Roads within 260 m, buildings within 450 m in the field
+  of view plus the skyline (towers over 60 m to 1.5 km), small low buildings beyond 250 m
+  skipped, walls back-face culled and drawn far to near, edges only within 140 m, roofs only
+  from above, other vehicles within 160 m as boxes.
+- Landmark designs (`src/buildings.js`): U.S. Bank Stadium (zinc walls, roof sloping from the
+  83 m prow), IDS Tower (blue glass), Target Center (green roof), Northrop (brick with a
+  ten-column portico on the mall side), Coffman Union (brick with its central tower), Huntington
+  Bank Stadium (horseshoe bowl: limestone wall, maroon seating, field).
+- Tests: `tests/test_build_buildings.py` (height sources and units, parts replacing outlines,
+  landmark outlines keeping theirs, stadiums mapped as `leisure`, drops, simplification,
+  multipolygon rings, output) and `node tests/pov.test.cjs` (decoding, grid query = brute force,
+  landmark geometry, the IDS Tower in view up Nicollet Mall and gone when turned around, bounded
+  work, vehicles culled by distance, frame time); the page test rides along.
+- **Exit:** downtown on Nicollet Mall the POV draws at most about 80 buildings and 350 faces;
+  0.3 ms of geometry per frame in Node, 0.4–0.5 ms per frame of drawing calls in desktop Chrome
+  (median; p90 0.9 ms) with the page at 60+ fps at both desktop and phone viewport sizes. A
+  phone at 4–5× slower would spend 2–5 ms a frame, well inside 30–60 fps — not yet confirmed on
+  a real phone.
 
 ### Phase 8 — Metrics, export and headless runs
 - VMT, VHT, deadhead %, occupancy, wait/ride distributions, bridge loads, fleet utilization.
@@ -370,4 +400,5 @@ Split into four steps so each lands green on its own.
 | 4 | done | Saturation flow, merge turns, keep-clear, pcu-4 private agents with real-scale demand, BPR + queue delay routing and en-route diversion, chokepoint panel and congestion layer. AM peak: 121-car queue at the I-35W UMN exits at 08:05, cleared by 10:00. ≈ 22 ms per 20× frame in desktop Chrome at the peak. |
 | 5 | done | Census 2020 blocks + LODES 2023 + OSM parking → 822 zones, 114k residents, 226k jobs; commuters, UMN, hospitals, errands, visitors, events by day of week; 721k trips on a Wednesday with 08–09 and 16–17 peaks; 1:20 agents; car-share lever, edge hubs, parking, green splits, gridlock relief. Downtown-residents target missed (35.7k Census vs 45k plan). |
 | 6 | done | Scenario controls (transit, cars kept, pooling, fleet, depots, EV, rebalancing); grid dispatch and request-driven sharing; area pooling; rebalancing to a forecast; battery and charging; fleet sweep: 19,000 vehicles for a 13.5-min average wait (floor ≈ 13 min from congestion); 10× AM peak at ~21 ms/frame in desktop Chrome. |
-| 7–9 | not started | |
+| 7 | done | 10,680 OSM buildings with heights (parts for towers), footprints on the map, ride-along Driver POV with culling and LOD, six landmark designs; ~0.5 ms per POV frame in desktop Chrome downtown. |
+| 8–9 | not started | |

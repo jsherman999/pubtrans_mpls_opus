@@ -27,6 +27,7 @@
     --waiting: #c026d3; --depot: #1d2733; --closure: #111827; --jam: #dc2626;
     --go: #16a34a; --amber: #f59e0b;
     --series-1: #2a78d6; --series-2: #eb6834;
+    --bldg: #dcd7cf; --bldg-mid: #cdc6bb; --bldg-tall: #b7ae9f; --landmark: #c9925f;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
@@ -52,10 +53,12 @@
       --waiting: #e879f9; --depot: #e6e9ee; --closure: #f8fafc; --jam: #ef4444;
       --go: #4ade80; --amber: #fbbf24;
       --series-1: #3987e5; --series-2: #d95926;
+      --bldg: #253041; --bldg-mid: #2e3a4c; --bldg-tall: #3a485c; --landmark: #8f6a45;
       color-scheme: dark;
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
     font: 14px/1.45 "Avenir Next", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
   body { overflow: hidden; }
@@ -126,6 +129,12 @@
   #info { display: none; left: calc(12px + env(safe-area-inset-left, 0px)); bottom: calc(40px + env(safe-area-inset-bottom, 0px));
     width: min(320px, calc(100vw - 24px)); padding: 10px 12px; }
   #info.open { display: block; }
+  #pov { display: none; right: calc(12px + env(safe-area-inset-right, 0px) + var(--panel-w, 0px)); bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    width: min(520px, calc(100vw - 24px - var(--panel-w, 0px))); padding: 8px; }
+  #pov.open { display: block; }
+  #pov canvas { display: block; width: 100%; aspect-ratio: 16 / 10; border-radius: 6px; background: #9cc3e6; }
+  #pov .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 6px; }
+  #pov .head span { color: var(--muted); }
   #info h3 { margin: 0 30px 4px 0; font-size: 15px; }
   #info dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; }
   #info dt { color: var(--muted); }
@@ -147,6 +156,7 @@
     #sheetToggle .grip { width: 36px; height: 4px; border-radius: 2px; background: var(--panel-edge); position: absolute; left: calc(50% - 18px); top: 4px; }
     #mapButtons { right: calc(12px + env(safe-area-inset-right, 0px)); top: auto; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
     #info { bottom: calc(120px + env(safe-area-inset-bottom, 0px)); }
+    #pov { top: calc(104px + env(safe-area-inset-top, 0px)); bottom: auto; right: 12px; width: calc(100vw - 24px); }
     #credit { bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
     #title { max-width: calc(100vw - 24px); }
   }
@@ -266,6 +276,8 @@
     <span><span class="sw" style="background:var(--depot)"></span>Depot (P)</span>
     <span><span class="sw" style="background:var(--psv)"></span>Shuttle-only street</span>
     <span><span class="sw" style="background:var(--closure)"></span>Closed direction</span>
+    <span><span class="sw" style="background:var(--bldg-tall)"></span>Buildings (zoom in; darker is taller)</span>
+    <span><span class="sw" style="background:var(--landmark)"></span>Landmark</span>
     <span><span class="sw" style="background:var(--amber)"></span>Slow (adds under 1 min)</span>
     <span><span class="sw" style="background:var(--jam)"></span>Jammed (adds 1 min or more)</span>
   </div>
@@ -273,14 +285,19 @@
     <a href="viewer.html">Street viewer</a> · <a href="source/index.html">Original grid app</a></p>
 </aside>
 
+<section id="pov" class="card" aria-label="Driver view">
+  <div class="head"><b id="povTitle">Driver view</b><span id="povStreet" class="num"></span><button id="povClose" aria-label="Close the driver view">✕</button></div>
+  <canvas id="povCanvas"></canvas>
+</section>
+
 <section id="info" class="card" aria-live="polite">
   <button class="close" id="infoClose" aria-label="Close details">✕</button>
   <h3 id="infoTitle"></h3>
   <dl id="infoList"></dl>
-  <div class="btns" id="infoButtons"><button id="follow" aria-pressed="false">Follow</button></div>
+  <div class="btns" id="infoButtons"><button id="follow" aria-pressed="false">Follow</button><button id="rideAlong">Ride along</button></div>
   <div class="btns" id="placeButtons" hidden><button id="openDepot">Open a depot here</button></div>
 </section>
-<div id="credit">Street and parking data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · Census data: U.S. Census Bureau</div>
+<div id="credit">Street, building and parking data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · Census data: U.S. Census Bureau</div>
 <div id="empty"><div><h1>No street data</h1><p>Run <code>python3 tools/build_osm.py --fetch</code>, then reload.</p></div></div>
 
 <script src="data/mpls_graph.js"></script>
@@ -293,6 +310,8 @@
 <script src="src/demand.js"></script>
 <script src="src/sim.js"></script>
 <script src="src/mapview.js"></script>
+<script src="src/buildings.js"></script>
+<script src="src/pov.js"></script>
 <script>
 "use strict";
 
@@ -337,7 +356,7 @@ function start(graph) {
   const map = MplsMapView.createMapView({
     canvas: $("map"), graph,
     themeKeys: ["sedan", "shuttle", "bus", "private", "police", "fire", "recovery", "employer", "grocery", "school",
-      "station", "residential", "waiting", "depot", "closure", "go", "amber", "jam", "muted", "panel-solid", "series-1", "series-2"],
+      "station", "residential", "waiting", "depot", "closure", "go", "amber", "jam", "muted", "panel-solid", "series-1", "series-2", "bldg", "bldg-mid", "bldg-tall", "landmark"],
     padding: () => phone() ? { left: 0, right: 0, top: 64, bottom: 64 } : { left: 0, right: panel.offsetWidth || 0, top: 56, bottom: 0 },
     overlay: drawOverlay,
     drawSignals,
@@ -385,6 +404,7 @@ function start(graph) {
     const inView = (x, y) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1;
     const sx = (x) => x * s + view.ox, sy = (y) => y * s + view.oy;
 
+    drawFootprints(ctx);
     drawCongestion(ctx);
 
     // Closures: a red bar across the closed direction, near its end.
@@ -517,6 +537,93 @@ function start(graph) {
     ctx.lineTo(cx - ca * hl - sa * hw, cy - sa * hl + ca * hw);
     ctx.closePath();
   }
+  // ---------------------------------------------------------------- buildings
+  // Footprints load after the page starts (560 KB) and draw from 0.5 px/m, one path per shade:
+  // under 15 m, under 40 m, taller, and the six landmarks.
+  let buildings = null;
+  (function loadBuildings() {
+    if (window.MPLS_BUILDINGS) { buildings = MplsBuildings.decodeBuildings(window.MPLS_BUILDINGS); return; }
+    const sc = document.createElement("script");
+    sc.src = "data/mpls_buildings.js";
+    sc.onload = () => { if (window.MPLS_BUILDINGS) { buildings = MplsBuildings.decodeBuildings(window.MPLS_BUILDINGS); map.requestDraw(); } };
+    sc.onerror = () => {};
+    document.head.appendChild(sc);
+  })();
+  function drawFootprints(ctx) {
+    const s = view.scale, b = map.bounds;
+    if (!buildings || s < 0.5) return;
+    const groups = { bldg: [], "bldg-mid": [], "bldg-tall": [], landmark: [] };
+    for (const bd of buildings.query(b.x0, b.y0, b.x1, b.y1)) {
+      const key = MplsBuildings.DESIGNS[bd.name] ? "landmark" : bd.h < 15 ? "bldg" : bd.h < 40 ? "bldg-mid" : "bldg-tall";
+      groups[key].push(bd);
+    }
+    for (const [key, list] of Object.entries(groups)) {
+      if (!list.length) continue;
+      ctx.beginPath();
+      for (const bd of list) {
+        const p = bd.pts;
+        ctx.moveTo(p[0] * s + view.ox, p[1] * s + view.oy);
+        for (let k = 2; k < p.length; k += 2) ctx.lineTo(p[k] * s + view.ox, p[k + 1] * s + view.oy);
+        ctx.closePath();
+      }
+      ctx.fillStyle = theme[key]; ctx.fill();
+    }
+  }
+
+  // ---------------------------------------------------------------- Driver POV
+  // Ride along with a vehicle: the camera sits in the driver's seat, interpolated between
+  // simulation steps so the view moves smoothly at any playback speed.
+  const EYE = { sedan: 1.3, private: 1.3, police: 1.4, firecar: 1.4, shuttle: 2.0, recovery: 2.0, bus: 2.6, fire: 2.6 };
+  const POV_COLOR = { sedan: "#0d9488", shuttle: "#ea580c", bus: "#7c3aed", private: "#9aa0a6", police: "#0369a1", fire: "#e11d48", firecar: "#e11d48", recovery: "#475569" };
+  let povOverride = null;
+  let pov = null, povVehicle = null, povPrev = null, povCur = null, povTickAt = 0, povFrames = 0;
+  function poseOf(v) { const p = sim.locate(v); return p && { x: p.x, y: p.y, heading: p.heading }; }
+  function openPov(v) {
+    if (!pov) { pov = MplsPov.createPov({ graph, buildings }); pov.buildingsSet = !!buildings; }
+    povVehicle = v; povPrev = povCur = poseOf(v); povTickAt = performance.now();
+    $("pov").classList.add("open");
+    $("povTitle").textContent = `Riding with ${KIND_NAME[v.kind].toLowerCase()} ${v.id.split("-").pop()}`;
+    requestAnimationFrame(drawPov);
+  }
+  function closePov() { povVehicle = null; $("pov").classList.remove("open"); }
+  function povAdvance() {   // after each simulation tick
+    if (!povVehicle) return;
+    if (povVehicle.removed) return closePov();
+    povPrev = povCur; povCur = poseOf(povVehicle) || povCur; povTickAt = performance.now();
+  }
+  function drawPov() {
+    if (!povVehicle || !povCur) return;
+    if (pov && !pov.buildingsSet && buildings) { pov = MplsPov.createPov({ graph, buildings }); pov.buildingsSet = true; }
+    const canvas = $("povCanvas"), dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = canvas.clientWidth || 480, h = canvas.clientHeight || 300;
+    if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const a = paused ? 1 : Math.min(1, (performance.now() - povTickAt) / TICK_MS);
+    const p0 = povPrev || povCur, p1 = povCur;
+    let dh = p1.heading - p0.heading;
+    while (dh > Math.PI) dh -= 2 * Math.PI;
+    while (dh < -Math.PI) dh += 2 * Math.PI;
+    let heading = p0.heading + dh * a;
+    // Driver's seat: 1.5 m behind the front, on the vehicle's line, at eye height.
+    let x = p0.x + (p1.x - p0.x) * a - Math.cos(heading) * 1.5; let y = p0.y + (p1.y - p0.y) * a - Math.sin(heading) * 1.5;
+    if (povOverride) { ({ x, y, heading } = povOverride); }   // a fixed camera, for checks and screenshots
+    const others = [];
+    for (const v of sim.state.vehicles) {
+      if (v === povVehicle || (v.lane < 0 && (v.state === "idle" || graph.nodes.flags[v.node] & 1))) continue;
+      const q = sim.locate(v);
+      if (!q || Math.abs(q.x - x) > 160 || Math.abs(q.y - y) > 160) continue;
+      const [L, Wd] = VEHICLE_SIZE[v.kind] || [5, 2];
+      others.push({ x: q.x, y: q.y, heading: q.heading, len: L, width: Wd, height: v.kind === "bus" || v.kind === "fire" ? 3.2 : v.kind === "shuttle" ? 2.6 : 1.5, color: POV_COLOR[v.kind] || "#888888" });
+    }
+    pov.draw(ctx, w, h, { x, y, z: EYE[povVehicle.kind] || 1.5, heading }, others);
+    povFrames++;
+    if (povVehicle.lane >= 0) $("povStreet").textContent = sim.router.arcs[povVehicle.route[povVehicle.ri]].link.name || "";
+    requestAnimationFrame(drawPov);
+  }
+  $("rideAlong").addEventListener("click", () => { if (selected && selected.kind) { openPov(selected); follow = true; $("follow").setAttribute("aria-pressed", "true"); } });
+  $("povClose").addEventListener("click", closePov);
+
   // Congestion: each delayed direction drawn alongside its street, on the right of travel.
   let showCongestion = true;
   function drawCongestion(ctx) {
@@ -914,6 +1021,7 @@ function start(graph) {
   function tick() {
     const t0 = performance.now();
     if (!paused) sim.run(speed);
+    povAdvance();
     if (follow && selected && selected.kind && !selected.removed) {
       const p = sim.locate(selected);
       if (p) map.centerOn(p.x, p.y);
@@ -930,7 +1038,8 @@ function start(graph) {
 
   // Exposed for debugging and for tests.
   window.mplsSim = { sim, map, select, tapAt, get selected() { return selected; }, get speed() { return speed; },
-    get paused() { return paused; }, tick, refresh };
+    get paused() { return paused; }, tick, refresh, openPov, closePov, get pov() { return pov; }, get buildings() { return buildings; },
+    get povFrames() { return povFrames; }, set povCamera(c) { povOverride = c; } };
 }
 </script>
 </body>

@@ -40,6 +40,15 @@ This writes `data/mpls_demand.js` and `data/mpls_demand.report.json` (totals and
 rebuild from the saved downloads with `python3 tools/build_demand.py`. Census data is public
 domain.
 
+## Build the buildings
+
+```
+python3 tools/build_buildings.py --fetch
+```
+
+Writes `data/mpls_buildings.js` (footprints with heights, loaded after the page starts) and a
+report. Building data © OpenStreetMap contributors (ODbL).
+
 ## Street map viewer
 
 `viewer.html` draws the street network: it opens with the whole area in view; drag to pan,
@@ -57,7 +66,8 @@ discharge at lane capacity, congestion that routes and drivers avoid, police/fir
 breakdowns. The Chokepoints panel tracks the river bridges, freeway ramps and map-edge entries.
 Scenario controls set how many of today's car trips stay cars, whether transit riders ride
 shuttles, pooling, the fleet by vehicle type, depots, battery-electric operation and rebalancing. Drag, scroll or pinch the map; tap a vehicle to
-see its riders and route (and follow it), or a place to see who is waiting. The panel (a bottom
+see its riders and route (follow it, or ride along in the driver's-seat view among the city's
+buildings), or a place to see who is waiting. The panel (a bottom
 sheet on phones) has playback speed, fleet and demand controls, live metrics and an event log.
 
 ## Fleet-size sweep
@@ -87,7 +97,7 @@ contraflow lanes).
 ## Tests
 
 ```
-python3 -m unittest discover -s tests -p "test_*.py"   # street and demand pipelines
+python3 -m unittest discover -s tests -p "test_*.py"   # street, demand and building pipelines
 node tests/viewer.test.cjs                             # decoder and street viewer
 node tests/routing.test.cjs                            # router, signals, 7,000-node benchmark
 node tests/motion.test.cjs                             # vehicle motion, up to 3,400 vehicles
@@ -95,6 +105,7 @@ node tests/sim.test.cjs                                # engine on the real netw
 node tests/congestion.test.cjs                         # capacity, congestion, AM peak
 node tests/demand.test.cjs                             # Census demand, daily totals, AM/PM shape
 node tests/fleet.test.cjs                              # scenario controls, fleet at scale, sweep
+node tests/pov.test.cjs                                # buildings, landmarks, driver view
 node tests/page.test.cjs                               # simulation page, headless
 node tests/simulation.cjs                              # original grid app (slow, ~2 minutes)
 ```

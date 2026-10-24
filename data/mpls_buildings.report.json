@@ -1,0 +1,106 @@
+{
+  "format_version": 1,
+  "elements": 11094,
+  "height_sources": {
+    "height tag": 131,
+    "levels": 1852,
+    "known tower": 0,
+    "default for type": 8697
+  },
+  "dropped": {
+    "outside box": 98,
+    "too small": 149,
+    "outline with parts": 171,
+    "part inside a landmark": 3,
+    "bad geometry": 0
+  },
+  "warnings": [],
+  "buildings": 10680,
+  "points": 66352,
+  "tallest": [
+    {
+      "name": "IDS Tower",
+      "height_m": 241.0
+    },
+    {
+      "name": "unnamed",
+      "height_m": 236.0
+    },
+    {
+      "name": "unnamed",
+      "height_m": 231.0
+    },
+    {
+      "name": "unnamed",
+      "height_m": 216.0
+    },
+    {
+      "name": "33 South Sixth",
+      "height_m": 204.0
+    },
+    {
+      "name": "Two22",
+      "height_m": 177.0
+    },
+    {
+      "name": "US Bank Plaza I",
+      "height_m": 171.0
+    },
+    {
+      "name": "unnamed",
+      "height_m": 167.6
+    },
+    {
+      "name": "unnamed",
+      "height_m": 164.0
+    },
+    {
+      "name": "unnamed",
+      "height_m": 158.0
+    },
+    {
+      "name": "SportsData, LLC",
+      "height_m": 153.0
+    },
+    {
+      "name": "Ameriprise Financial HQ",
+      "height_m": 152.0
+    },
+    {
+      "name": "unnamed",
+      "height_m": 150.0
+    },
+    {
+      "name": "unnamed",
+      "height_m": 150.0
+    },
+    {
+      "name": "Target Plaza South",
+      "height_m": 150.0
+    }
+  ],
+  "landmarks_found": [
+    "US Bank Stadium",
+    "IDS Tower",
+    "Target Center",
+    "Northrop Memorial Auditorium",
+    "Coffman Memorial Union",
+    "Huntington Bank Stadium"
+  ],
+  "landmarks_missing": [],
+  "by_kind": {
+    "house": 2820,
+    "apartments": 870,
+    "commercial": 223,
+    "office": 75,
+    "university": 144,
+    "civic": 18,
+    "industrial": 79,
+    "garage": 2124,
+    "parking": 23,
+    "stadium": 4,
+    "church": 26,
+    "other": 4274
+  },
+  "output_bytes": 572708
+}

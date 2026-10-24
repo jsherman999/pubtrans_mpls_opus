@@ -40,7 +40,8 @@ const html = read("index.html");
 const inline = html.split("<script>")[1].split("</script>")[0];
 const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
 assert.deepStrictEqual(scripts, ["data/mpls_graph.js", "data/mpls_demand.js", "src/graph.js", "src/routing.js", "src/traffic.js",
-  "src/motion.js", "src/congestion.js", "src/demand.js", "src/sim.js", "src/mapview.js"], "page loads the data and engine modules in order");
+  "src/motion.js", "src/congestion.js", "src/demand.js", "src/sim.js", "src/mapview.js", "src/buildings.js", "src/pov.js"],
+  "page loads the data and engine modules in order");
 
 // Boot the page headless. Without data/mpls_demand.js it runs the placeholder demand.
 function boot({ withDemand }) {
@@ -50,6 +51,7 @@ const ctx = new Proxy({}, {
   get(target, prop) {
     if (prop in target) return target[prop];
     if (prop === "measureText") return (t) => ({ width: String(t).length * 7 });
+    if (prop === "createLinearGradient") return () => ({ addColorStop() {} });
     if (prop in calls) return () => { calls[prop]++; };
     return () => {};
   },
@@ -59,7 +61,7 @@ const els = {};
 const getEl = (id) => (els[id] = els[id] || element(id));
 const canvas = getEl("map");
 Object.assign(canvas, { clientWidth: 390, clientHeight: 780, width: 300, height: 150, getContext: () => ctx });
-for (const id of ["chartWait", "chartQueued", "chartPlan"]) Object.assign(getEl(id), { clientWidth: 300, clientHeight: 56, getContext: () => ctx });
+for (const id of ["chartWait", "chartQueued", "chartPlan", "povCanvas"]) Object.assign(getEl(id), { clientWidth: 300, clientHeight: 56, getContext: () => ctx });
 const steppers = [];
 for (const [step, by] of [["population", -250], ["population", 250], ["sedan", -5], ["sedan", 5], ["shuttle", -5], ["shuttle", 5], ["bus", -2], ["bus", 2]]) {
   const b = element(""); b.dataset = { step, by: String(by) }; steppers.push(b);
@@ -82,6 +84,8 @@ const sandbox = {
     title: "",
     getElementById: getEl,
     createElement: () => element(""),
+    // Scripts added at run time (the building footprints) load straight away.
+    head: { appendChild(sc) { vm.runInContext(read(sc.src), sandbox, { filename: sc.src }); if (sc.onload) sc.onload(); } },
     querySelectorAll: (sel) => (sel === "[data-step]" ? steppers : []),
   },
 };
@@ -92,7 +96,7 @@ vm.runInContext(inline, sandbox, { filename: "index.html" });
 assert.deepStrictEqual(errors, []);
 const page = sandbox.mplsSim;
 assert.ok(page, "page started");
-const frame = () => { now += 100; const t = timers.splice(0); t.forEach((fn) => fn()); while (rafs.length) rafs.shift()(); };
+const frame = () => { now += 100; const t = timers.splice(0); t.forEach((fn) => fn()); rafs.splice(0).forEach((fn) => fn()); };   // one animation frame
 return { page, els, steppers, frame, errors, calls, sandbox };
 }
 
@@ -269,12 +273,30 @@ const sunday = sim.state.plan;
 assert.ok(sunday.day === "Sunday" && sunday.byPurpose.event > 120000, "Vikings game on Sunday");
 els.sampling.fire("change", { target: { value: "10" } });
 assert.match(sandbox.location.search, /^sampling=10$/, "sampling change reloads with ?sampling=10");
+// Building footprints load after start and draw once zoomed in.
+assert.ok(page.buildings && page.buildings.list.length > 10000, "buildings loaded");
+const ids = page.buildings.byName.get("IDS Tower")[0];
+map.centerOn(ids.cx, ids.cy, 1.5);
+const fills = calls.fill;
+frame();
+assert.ok(calls.fill > fills + 4, "footprints drawn at street zoom");
+map.fit();
 // The vehicle panel says how many real vehicles an agent stands for.
 for (let i = 0; i < 60; i++) frame();
 const v = sim.state.vehicles.find((x) => x.kind === "shuttle" && x.lane >= 0);
 page.select(v);
 assert.ok(els.infoList.children.some((c) => c.textContent === "20 vehicles travelling together (1 : 20 sample)"));
+// Ride along: the driver view opens and redraws every animation frame.
+els.rideAlong.fire("click");
+assert.ok(els.pov.classList.contains("open"));
+assert.match(els.povTitle.textContent, /^Riding with shuttle \d+$/);
+const before0 = page.povFrames;
+for (let i = 0; i < 5; i++) frame();
+assert.ok(page.povFrames >= before0 + 5, "driver view redrawn each frame");
+assert.ok(page.pov.stats.roads > 0, "the street is drawn");
+els.povClose.fire("click");
+assert.ok(!els.pov.classList.contains("open"));
 assert.deepStrictEqual(errors, []);
 console.log(`PASS: Census demand on the page: 05:30 start, Wednesday with a Twins game, ${road.toLocaleString()} vehicles on the road at 08:00 in real numbers, ` +
-  "car-share lever, plan chart readout, day/event/sampling controls, agent scale in the details panel.");
+  "car-share lever, plan chart readout, day/event/sampling controls, agent scale in the details panel, footprints, ride-along driver view.");
 }
