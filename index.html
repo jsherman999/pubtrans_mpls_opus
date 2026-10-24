@@ -223,7 +223,8 @@
     <input type="range" id="carShare" min="0" max="100" step="5"></div>
   <p class="hint" id="carShareHint"></p>
   <div class="row"><label for="sampling">Sampling</label><select id="sampling">
-    <option value="10">1 agent : 10 people</option><option value="20">1 agent : 20 people (faster)</option></select></div>
+    <option value="5">1 agent : 5 people (most accurate, slowest)</option><option value="10">1 agent : 10 people</option>
+    <option value="20">1 agent : 20 people (fastest)</option></select></div>
   <div class="row"><span>Residents · jobs present today</span><span id="dPeople" class="num">—</span></div>
   <div class="row"><span>UMN Minneapolis campus today</span><span id="dCampus" class="num">—</span></div>
   <div class="row"><span>Trips today: walk · shuttle · car</span><span id="dTrips" class="num">—</span></div>
@@ -770,7 +771,8 @@ function start(graph) {
   $("ev").addEventListener("change", (e) => { sim.setEv(e.target.checked); refresh(); });
   if (sim.demand) {
     $("fleetHint").textContent = "Removing vehicles parks idle ones first; busy ones finish their riders, then leave. The default fleet " +
-      "is the smallest that keeps the average wait under 15 minutes through the morning rush (tools/fleet_sweep.cjs).";
+      "is 8,000 vehicles: with all transit replaced, more vehicles stop adding deliveries because the streets are full " +
+      "(tools/fleet_sweep.cjs). With today's transit kept, about 4,000 give a 9-minute average wait.";
     $("transitRow").hidden = false; $("rebalanceRow").hidden = false;
     $("transitReplaced").checked = sim.settings.transitReplaced;
     $("rebalance").checked = sim.settings.rebalance;

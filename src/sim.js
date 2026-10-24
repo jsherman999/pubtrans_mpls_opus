@@ -62,14 +62,16 @@
     // places and population when given. Everything that moves is then sampled: one rider,
     // shuttle or car agent stands for `sampling` real ones and takes their road space.
     demand: null,
-    sampling: 20,
+    sampling: 10,                       // people per rider agent and vehicles per fleet agent
+                                        // (1:5 in tools/fleet_sweep.cjs, which values accuracy)
+    carSampling: 20,                    // cars per private-car agent (traffic is coarser than pooling)
     day: 2,                             // 0 = Monday ... 6 = Sunday
     carShare: 0.5,                      // share of today's car trips still made by private car;
                                         // the rest switch to SDEV shuttles (most cars replaced)
     transitReplaced: true,              // today's transit riders ride SDEV shuttles (else not simulated)
     rebalance: true,                    // idle vehicles move toward expected demand (Census demand)
     ev: true,                           // battery-electric fleet: range, charging at depots
-    demandFleet: { sedans: 150, shuttles: 650, buses: 150 },  // agents (× sampling real vehicles); the fleet sweep's pick for a 15-min wait
+    demandFleet: { sedans: 80, shuttles: 480, buses: 240 },   // agents (× sampling = 8,000 vehicles), where deliveries level off (fleet sweep)
     rareEvents: true,
   };
 
@@ -88,9 +90,10 @@
     const demand = opts.demand ? (opts.demand.generate ? opts.demand : Dm.createDemand(opts.demand)) : null;
     if (demand) {
       for (const k of ["sedans", "shuttles", "buses"]) if (options[k] == null) opts[k] = opts.demandFleet[k];
-      opts.trafficScale = opts.sampling;
+      opts.trafficScale = Math.max(opts.sampling, opts.carSampling);
     }
     const scale = demand ? opts.sampling : 1;            // real people or vehicles per agent
+    const carEvery = demand ? Math.max(1, Math.round(opts.trafficScale / scale)) : 1;
     const dayStart = opts.dayStart ?? (demand ? Dm.DEFAULTS.dayStart : DAY_START);
     const router = options.router || R.createRouter(graph);
     const signals = T.createSignals(graph, { seed: opts.seed });
@@ -417,7 +420,11 @@
         if (!r || !r.arcs.length) { if (origin === dest) S.walked += tr.weight; else S.unrouted += tr.weight; continue; }
         if (lot) lot.used += tr.weight;
         S.carTrips += tr.weight;
-        const v = makeVehicle("private", origin, { state: "private_trip", purpose: tr.purpose, pcu: scale,
+        // Cars are sampled more coarsely than riders: one in carSampling/sampling of these
+        // trips becomes an agent standing for carSampling cars (chosen by a second hash of the
+        // tour, so both legs agree).
+        if (carEvery > 1 && (Math.imul(tr.tag | 0, 2654435761) >>> 0) % carEvery !== 0) continue;
+        const v = makeVehicle("private", origin, { state: "private_trip", purpose: tr.purpose, pcu: opts.trafficScale,
           destination: tr.to.zone != null ? zonePlaceOf(tr.to.zone) : null });
         motion.setRoute(v, r.arcs);
         if (isPortal(origin)) S.atPortal.push(v);
@@ -668,8 +675,18 @@
         const c = cellOf(anchorNode(v));
         if (!byCell.has(c)) byCell.set(c, []);
         byCell.get(c).push(v);
+        v.idleCell = c;
       }
       return idleIndex;
+    }
+    // A vehicle given work during dispatch leaves the index, so empty kinds and cells cost nothing.
+    function unindex(v) {
+      const byCell = idleIndex && idleIndex.get(v.kind);
+      const list = byCell && byCell.get(v.idleCell);
+      if (!list) return;
+      const i = list.indexOf(v);
+      if (i >= 0) list.splice(i, 1);
+      if (!list.length) byCell.delete(v.idleCell);
     }
     function findIdle(kind, node) {
       let best = null, bd = Infinity;
@@ -746,6 +763,7 @@
       }
       v.sharingDetour = 0;
       v.assignTag = tag; v.sharedCount = 0;
+      unindex(v);
       for (const r of reqs) r.assignedAt = S.t;
       v.pickupQueue = reqs.slice();
       v.riders = [];
@@ -922,14 +940,15 @@
       for (const v of S.vehicles) {
         if (!FLEET_KINDS.includes(v.kind) || v.retiring || (v.battery && v.kwh < CHARGE_BELOW * v.battery)) continue;
         if (v.state === "repositioning") { const k = cellKey(v.target); have.set(k, (have.get(k) || 0) + 1); }
-        else if (v.state === "idle" && S.t - v.idleSince >= 60) { idle.push(v); const k = cellKey(anchorNode(v)); have.set(k, (have.get(k) || 0) + 1); }
+        else if (v.state === "idle" && S.t - v.idleSince >= 300) { idle.push(v); const k = cellKey(anchorNode(v)); have.set(k, (have.get(k) || 0) + 1); }
       }
       if (!idle.length) return;
-      // One idle vehicle for every four expected pickups in the next half hour.
-      const deficits = [...need.values()].map((c) => ({ ...c, gap: Math.ceil(c.n / 4) - (have.get(c.k) || 0) }))
+      // One idle vehicle for every six expected pickups in the next half hour; only vehicles idle
+      // for five minutes move (moving them sooner mostly added empty driving).
+      const deficits = [...need.values()].map((c) => ({ ...c, gap: Math.ceil(c.n / 6) - (have.get(c.k) || 0) }))
         .filter((c) => c.gap > 0).sort((a, b) => b.gap - a.gap);
-      const spare = idle.filter((v) => { const k = cellKey(anchorNode(v)); const want = Math.ceil((need.get(k)?.n || 0) / 4); return (have.get(k) || 0) > want; });
-      let moves = Math.max(3, Math.ceil(idle.length * 0.2));
+      const spare = idle.filter((v) => { const k = cellKey(anchorNode(v)); const want = Math.ceil((need.get(k)?.n || 0) / 6); return (have.get(k) || 0) > want; });
+      let moves = Math.max(2, Math.ceil(idle.length * 0.1));
       for (const c of deficits) {
         const target = [...c.nodes.entries()].sort((a, b) => b[1] - a[1])[0][0];
         for (let g = 0; g < c.gap && moves > 0 && spare.length; g++) {

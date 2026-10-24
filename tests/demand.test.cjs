@@ -103,8 +103,8 @@ const within = (x, target, tol) => Math.abs(x / target - 1) <= tol;
   const graph = G.decodeMplsGraph(load("data/mpls_graph.js", "MPLS_GRAPH"));
   const sim = Sim.createSim(graph, { seed: 2, demand: raw });
   const S = sim.state;
-  assert.strictEqual(sim.scale, 20, "1:20 sampling by default");
-  assert.ok(S.vehicles.every((v) => v.pcu === (v.kind === "bus" ? 40 : 20)), "every fleet agent stands for 20 vehicles");
+  assert.strictEqual(sim.scale, 10, "1:10 sampling by default");
+  assert.ok(S.vehicles.every((v) => v.pcu === (v.kind === "bus" ? 20 : 10)), "every fleet agent stands for 10 vehicles");
   assert.strictEqual(S.minute, 5.5 * 60, "a Census-demand day starts at 05:30");
   assert.ok(S.places.length > 600 && S.places.every((p) => sim.core.inCore[p.node]), "zones and edge hubs sit in the connected core");
   const hubs = S.places.filter((p) => p.hub);
@@ -119,7 +119,7 @@ const within = (x, target, tol) => Math.abs(x / target - 1) <= tol;
   }
   assert.strictEqual(sim.clock(), "09:00");
   assert.ok(S.completed > 1000, `rides completed (${S.completed} agents = ${S.completedPeople.toLocaleString()} people)`);
-  assert.strictEqual(S.completedPeople, S.completed * 20, "each completed ride counts 20 people");
+  assert.strictEqual(S.completedPeople, S.completed * 10, "each completed ride counts 10 people");
   const released = S.carTrips + S.shuttleTrips + S.walked + S.unrouted;
   const due = S.trips.filter((t) => t.minute <= S.minute).reduce((s, t) => s + t.weight, 0);
   assert.strictEqual(released, due, "every trip due so far was released once");
@@ -129,13 +129,13 @@ const within = (x, target, tol) => Math.abs(x / target - 1) <= tol;
   assert.ok(maxCars > 3000, `rush-hour private traffic (${maxCars} cars on the road)`);
   // Gridlock relief should be rare: under 3 % of car and shuttle agent trips (the default fleet
   // of 19,000 vehicles loads the network hard at the peak).
-  const agentTrips = (S.carTrips + S.shuttleTrips) / 20;
+  const agentTrips = S.carTrips / 20 + S.shuttleTrips / 10;   // cars sampled 1:20, riders 1:10
   assert.ok(sim.motion.stats.jumps < 0.03 * agentTrips, `gridlock jumps ${sim.motion.stats.jumps} of ${Math.round(agentTrips)} agent trips`);
   // The car-share lever: all of today's drivers keep their cars.
   const more = Sim.createSim(graph, { seed: 2, demand: raw, carShare: 1 });
   more.run(20 * 150);
   assert.ok(more.state.carTrips > 1.6 * S.carTrips * 150 / 210 * 0.8, "carShare 1 keeps today's car traffic");
-  console.log(`PASS: Census-demand morning 05:30–09:00 at 1:20: ${S.completed.toLocaleString()} rides (${S.completedPeople.toLocaleString()} people), ` +
+  console.log(`PASS: Census-demand morning 05:30–09:00 at 1:10 (cars 1:20): ${S.completed.toLocaleString()} rides (${S.completedPeople.toLocaleString()} people), ` +
     `${Math.round(carShare * 100)} % of motorised trips by car, up to ${maxCars.toLocaleString()} cars and ${maxRoad} agents on the road, ` +
     `${sim.motion.stats.jumps} gridlock jumps in ${Math.round(agentTrips).toLocaleString()} agent trips, ${S.unrouted} unrouted; audit clean.`);
 }

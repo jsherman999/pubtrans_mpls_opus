@@ -73,13 +73,15 @@ sheet on phones) has playback speed, fleet and demand controls, live metrics and
 ## Fleet-size sweep
 
 ```
-node tools/fleet_sweep.cjs --scales 0.4,0.8,1,1.2 --until 10:00 --target 15 --out data/fleet_sweep.json
+node tools/fleet_sweep.cjs --totals 4000,8000,12000 --until 10:00 --target 10 --out data/fleet_sweep.json
+node tools/fleet_sweep.cjs --totals 2000,3000,4000 --keep-transit
 ```
 
-Runs the same seeded morning with the fleet scaled by each factor and reports average and
-90th-percentile waits, riders still waiting and delivered, and run time; the smallest fleet that
-meets the target is the recommendation. Options: `--sampling 10|20`, `--day 0-6`,
-`--car-share 0-1`, `--seed`.
+Runs the same seeded morning (1:5 sampling) with each fleet size and reports average and
+90th-percentile waits, riders still waiting and delivered, riders per vehicle-hour and run time;
+the smallest fleet that meets the target is the recommendation. Options: `--mix` (shares of
+sedans, shuttles, buses), `--scales` (multiples of the default fleet), `--sampling 5|10|20`,
+`--day 0-6`, `--car-share 0-1`, `--keep-transit`, `--seed`.
 
 ## Run locally
 

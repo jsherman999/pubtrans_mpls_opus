@@ -31,7 +31,7 @@
   };
   const STUDENT_DAY = [1.0, 1.0, 1.0, 0.95, 0.75, 0.08, 0.05];
   const DEFAULTS = {
-    sampling: 20,               // people per simulated agent
+    sampling: 10,               // people per simulated agent
     day: 2,                     // Wednesday
     seed: 1,
     walkMeters: 800,            // trips inside the area shorter than this are walked

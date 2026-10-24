@@ -234,7 +234,7 @@ console.log(`PASS: page fits a phone at load, 20× frames advance a minute each 
 const { page, els, steppers, frame, errors, calls, sandbox } = boot({ withDemand: true });
 const { sim, map } = page;
 const K = sim.scale;
-assert.ok(sim.demand && K === 20, `Census demand at 1:20 (demand ${!!sim.demand}, K ${K})`);
+assert.ok(sim.demand && K === 10, `Census demand at 1:10 (demand ${!!sim.demand}, K ${K})`);
 assert.strictEqual(els.demandBox.hidden, false);
 assert.strictEqual(els.popStepper.hidden, true, "population comes from the Census, not a stepper");
 assert.strictEqual(els.clock.textContent, "05:30");
@@ -271,8 +271,8 @@ els.event.fire("change", { target: { value: "2" } });
 assert.strictEqual(sim.settings.events[0].venue, "U.S. Bank Stadium");
 const sunday = sim.state.plan;
 assert.ok(sunday.day === "Sunday" && sunday.byPurpose.event > 120000, "Vikings game on Sunday");
-els.sampling.fire("change", { target: { value: "10" } });
-assert.match(sandbox.location.search, /^sampling=10$/, "sampling change reloads with ?sampling=10");
+els.sampling.fire("change", { target: { value: "5" } });
+assert.match(sandbox.location.search, /^sampling=5$/, "sampling change reloads with ?sampling=5");
 // Building footprints load after start and draw once zoomed in.
 assert.ok(page.buildings && page.buildings.list.length > 10000, "buildings loaded");
 const ids = page.buildings.byName.get("IDS Tower")[0];
@@ -285,7 +285,7 @@ map.fit();
 for (let i = 0; i < 60; i++) frame();
 const v = sim.state.vehicles.find((x) => x.kind === "shuttle" && x.lane >= 0);
 page.select(v);
-assert.ok(els.infoList.children.some((c) => c.textContent === "20 vehicles travelling together (1 : 20 sample)"));
+assert.ok(els.infoList.children.some((c) => c.textContent === "10 vehicles travelling together (1 : 10 sample)"));
 // Ride along: the driver view opens and redraws every animation frame.
 els.rideAlong.fire("click");
 assert.ok(els.pov.classList.contains("open"));
@@ -297,6 +297,6 @@ assert.ok(page.pov.stats.roads > 0, "the street is drawn");
 els.povClose.fire("click");
 assert.ok(!els.pov.classList.contains("open"));
 assert.deepStrictEqual(errors, []);
-console.log(`PASS: Census demand on the page: 05:30 start, Wednesday with a Twins game, ${road.toLocaleString()} vehicles on the road at 08:00 in real numbers, ` +
+console.log(`PASS: Census demand on the page (1:10): 05:30 start, Wednesday with a Twins game, ${road.toLocaleString()} vehicles on the road at 08:00 in real numbers, ` +
   "car-share lever, plan chart readout, day/event/sampling controls, agent scale in the details panel, footprints, ride-along driver view.");
 }
