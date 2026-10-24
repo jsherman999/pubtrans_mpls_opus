@@ -15,7 +15,8 @@ cars that remain and with freeway through-traffic, at signals that discharge at 
 Adapted from [pubtrans_15_minute_city](https://github.com/jsherman999/pubtrans_15_minute_city)
 (source commit `60774088fd727f49125c9bb2e979839fe8b3be2c`), which ran on a generated 6 × 6 grid.
 The original app is kept at [`source/index.html`](source/index.html), unchanged except that on
-phones its controls are a second page swiped in from the right, as on the other two pages; its
+phones its controls, live-metrics graph and debug stream are a second page swiped in from the
+right, as on the other two pages; its
 documentation is [`docs/SOURCE_README.md`](docs/SOURCE_README.md) and
 [`docs/SOURCE_ARCHITECTURE.md`](docs/SOURCE_ARCHITECTURE.md).
 

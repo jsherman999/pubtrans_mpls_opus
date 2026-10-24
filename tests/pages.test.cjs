@@ -81,6 +81,7 @@ assert.ok(!controls.inert, "the side panel stays reachable on wide screens");
 const html = fs.readFileSync(path.join(ROOT, "source/index.html"), "utf8");
 assert.ok(html.indexOf('<script src="../src/pages.js"></script>') > html.indexOf("setInterval(tick, BASE_TICK_MS);"), "loaded after the app");
 for (const idRef of ["pages-tab", "pages-back"]) assert.match(html, new RegExp(`id="${idRef}"`));
-assert.match(html, /panel: document\.getElementById\("controls"\), edge: document\.body/);
+assert.ok(/const controls = document\.getElementById\("controls"\)/.test(html) && /panel: controls, edge: document\.body/.test(html), "the sidebar is the panel, the whole page the swipe area");
+assert.ok(/liveState\.after\(dock\)/.test(html) && /home\.insertBefore\(dock, homeNext\)/.test(html), "graph and debug stream move to the controls page on phones and back on wide screens");
 console.log("PASS: original grid app phone pages — swipe left anywhere on the maps, swipe right back, sliders, shortcut bar and " +
-  "scrolling left alone, tab and back button, wide screens unaffected.");
+  "scrolling left alone, tab and back button, wide screens unaffected; graph and debug stream join the controls page.");

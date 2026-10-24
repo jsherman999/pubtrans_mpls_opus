@@ -197,6 +197,14 @@ button {min-height:36px;} .stepper-btns button {width:36px;height:36px;}
   width:28px;min-height:0;padding:12px 0;border-right:0;border-radius:10px 0 0 10px;background:#2a2c33ee;color:#c5d4e5;font-size:12px;font-weight:600;}
  #pages-tab::before {content:"";width:7px;height:7px;border:solid currentColor;border-width:0 0 1.5px 1.5px;transform:translateX(2px) rotate(45deg);}
  #pages-tab span {writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:0.04em;}
+ /* The live-metrics graph and debug stream move onto the controls page, under Live state. */
+ .sidebar .side-dock {flex-shrink:0;flex-direction:column-reverse;gap:12px;margin:0 0 18px;}
+ .sidebar .side-dock .graph-panel {height:200px;border:1px solid #2a2c33;border-radius:6px;overflow:hidden;}
+ .sidebar .side-dock .debug-panel {height:360px;border:1px solid #2a2c33;border-radius:6px;overflow:hidden;}
+ .main-col.dbg-collapsed ~ .sidebar .side-dock .debug-panel {height:auto;}
+ .main-col.dbg-collapsed ~ .sidebar #debug-log {display:none;}
+ .main-col.dbg-collapsed ~ .sidebar #dbg-toggle {transform:rotate(-90deg);}
+ .sidebar #debug-log {touch-action:pan-y;}   /* a sideways swipe on the stream still turns the page */
 }
 @media(prefers-reduced-motion:reduce) {.sidebar {transition:none;}}
 </style>
@@ -5229,19 +5237,27 @@ if(document.querySelectorAll)installHelpTooltips();
 dbg("SYSTEM", "Debug stream active — Auto mode running at 1× (slowest).");
 setInterval(tick, BASE_TICK_MS);
 </script>
-<button id="pages-tab" aria-controls="controls" aria-label="Show controls and live state"><span>Controls &amp; POV</span></button>
+<button id="pages-tab" aria-controls="controls" aria-label="Show controls, live state and the debug stream"><span>Controls &amp; stats</span></button>
 <script src="../src/pages.js"></script>
 <script>
 // Phones: the controls are a second full-screen page to the right of the maps (src/pages.js). The
 // maps here do not pan, so a swipe left anywhere on them turns the page; a swipe right returns.
+// The live-metrics graph and debug stream join the controls, under Live state.
 (function () {
   if (!window.MplsPages) return;
   const phone = () => matchMedia("(max-width: 800px)").matches;
-  const pages = MplsPages.createPages({ panel: document.getElementById("controls"), edge: document.body,
+  const controls = document.getElementById("controls"), dock = document.querySelector(".side-dock");
+  const home = dock.parentElement, homeNext = dock.nextSibling, liveState = controls.querySelector(".hud");
+  function placeDock() {
+    if (phone()) { if (dock.parentElement !== controls) liveState.after(dock); }
+    else if (dock.parentElement !== home) home.insertBefore(dock, homeNext);
+  }
+  placeDock();
+  const pages = MplsPages.createPages({ panel: controls, edge: document.body,
     tab: document.getElementById("pages-tab"), back: document.getElementById("pages-back"), isPhone: phone,
     // The shortcut bar scrolls sideways; the guide, tooltips and sliders keep their own touches.
     edgeAccept: (e) => !(e.target.closest && e.target.closest(".map-nav, dialog, .help-tooltip, input[type=range], select")) });
-  addEventListener("resize", () => pages.setOpen(pages.open));
+  addEventListener("resize", () => { placeDock(); pages.setOpen(pages.open); });
   document.querySelector('.map-nav a[href="#controls"]').addEventListener("click", (e) => {
     if (phone()) { e.preventDefault(); pages.setOpen(true); }
   });

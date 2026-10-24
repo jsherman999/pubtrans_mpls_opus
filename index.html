@@ -188,6 +188,7 @@
     #pov { top: calc(104px + env(safe-area-inset-top, 0px)); bottom: auto; right: 12px; width: calc(100vw - 24px); }
     #credit { max-width: calc(100vw - 190px); line-height: 1.3; }
     #title { max-width: calc(100vw - 52px); }
+    #log { touch-action: pan-y; }   /* a sideways swipe on the log still turns the page */
   }
   @media (prefers-reduced-motion: reduce) { #panel { transition: none; } }
 </style>
