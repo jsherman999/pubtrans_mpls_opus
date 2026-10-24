@@ -21,7 +21,7 @@ function element(id) {
       set: new Set(),
       add(c) { this.set.add(c); }, remove(c) { this.set.delete(c); },
       contains(c) { return this.set.has(c); },
-      toggle(c) { if (this.set.has(c)) { this.set.delete(c); return false; } this.set.add(c); return true; },
+      toggle(c, force) { const on = force === undefined ? !this.set.has(c) : !!force; if (on) this.set.add(c); else this.set.delete(c); return on; },
     },
     get firstChild() { return this.children[0] || null; },
     get lastChild() { return this.children[this.children.length - 1] || null; },
@@ -76,6 +76,7 @@ const sandbox = {
   getComputedStyle: () => ({ getPropertyValue: () => " #123456" }),
   matchMedia: (q) => ({ matches: q.includes("max-width: 760px"), addEventListener() {} }),   // phone layout
   devicePixelRatio: 3,
+  innerWidth: 390,
   addEventListener() {},
   location: { search: "", href: "index.html" },
   URLSearchParams,
@@ -106,9 +107,9 @@ const { page, els, steppers, frame, errors, calls } = boot({ withDemand: false }
 const { sim, map } = page;
 const { view, graph } = map;
 
-// The whole study area fits a phone screen at load, clear of the title card and the sheet.
+// The whole study area fits a phone screen at load, clear of the title card and the Stats tab.
 assert.ok(view.ox >= 0 && view.ox + graph.width * view.scale <= 390 + 1e-6);
-assert.ok(view.oy >= 64 - 1e-6 && view.oy + graph.height * view.scale <= 780 - 64 + 1e-6, "map fits between the title card and the bottom sheet");
+assert.ok(view.oy >= 64 - 1e-6 && view.oy + graph.height * view.scale <= 780 - 64 + 1e-6, "map fits below the title card");
 assert.strictEqual(map.portalMarkerRadius(view.scale), 0, "portal markers hidden at whole-area zoom");
 
 // 20× playback: each frame advances 20 steps (one simulated minute) and draws.
@@ -217,8 +218,36 @@ els.emergency.fire("click");
 assert.strictEqual(sim.state.incidents.length >= 1, true);
 frame();
 assert.notStrictEqual(els.hEmergency.textContent, "None");
+// Phone pages: the panel is a full-screen page beside the map, opened by the tab, a swipe left
+// from the right edge or a flick of the map, and closed by its Map button or a swipe right.
+const isOpen = () => els.panel.classList.contains("open");
+const swipe = (el, pts, end = "pointerup") => {
+  const at = ([x, y, t]) => ({ clientX: x, clientY: y, offsetX: x, offsetY: y, timeStamp: t, pointerId: 1, target: el });
+  el.fire("pointerdown", at(pts[0]));
+  for (const p of pts.slice(1)) el.fire("pointermove", at(p));
+  el.fire(end, { type: end, ...at(pts[pts.length - 1]) });
+};
+assert.ok(!isOpen() && els.panel.inert, "panel starts off-screen and out of the tab order");
+els.statsTab.fire("click");
+assert.ok(isOpen() && !els.panel.inert && els.sheetToggle.attrs["aria-expanded"] === "true", "Stats tab opens the panel");
 els.sheetToggle.fire("click");
-assert.ok(els.panel.classList.contains("open") && els.sheetToggle.attrs["aria-expanded"] === "true");
+assert.ok(!isOpen() && els.sheetToggle.attrs["aria-expanded"] === "false", "Map button closes it");
+swipe(els.swipeEdge, [[385, 400, 0], [370, 402, 30], [300, 405, 80], [240, 405, 130]]);
+assert.ok(isOpen() && els.panel.style.transform === "", "swipe left from the edge opens the panel");
+swipe(els.panel, [[100, 300, 1000], [105, 360, 1030], [110, 500, 1080]], "pointercancel");
+assert.ok(isOpen(), "a vertical scroll on the panel keeps it open");
+swipe(els.panel, [[60, 300, 2000], [80, 301, 2030], [150, 305, 2080], [220, 305, 2130]]);
+assert.ok(!isOpen(), "swipe right on the panel shows the map");
+swipe(els.swipeEdge, [[385, 400, 3000], [370, 400, 3200], [350, 400, 3400], [340, 400, 3600]]);
+assert.ok(!isOpen(), "a short, slow pull from the edge settles back to the map");
+const ox = view.ox;
+swipe(els.map, [[300, 400, 4000], [250, 402, 4040], [180, 404, 4090]]);
+assert.ok(isOpen() && view.ox === ox, "a quick flick left on the map opens the panel and leaves the map where it was");
+els.sheetToggle.fire("click");
+swipe(els.map, [[300, 400, 5000], [280, 401, 5300], [200, 402, 5900]]);
+assert.ok(!isOpen(), "a slow drag on the map pans it");
+els.sheetToggle.fire("click");
+assert.ok(isOpen());
 els.reset.fire("click");
 assert.ok(sim.state.t === 0 && sim.state.completed === 0 && els.clock.textContent === "07:30");
 assert.strictEqual(els.log.children.length, 1, "log restarts with the reset entry");

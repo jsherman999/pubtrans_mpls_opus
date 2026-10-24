@@ -108,8 +108,8 @@ street, signals per approach, places and waiting counts, and vehicles (dots far 
 shapes up close, sampled cars as several cars nose to tail). Picking inverts the view transform.
 **Ride along** opens the driver's-seat view (`src/pov.js`): roads, extruded buildings with
 back-face and distance culling, the skyline out to 1.5 km, landmark designs and nearby
-vehicles, drawn far to near and interpolated between steps. The panel (a bottom sheet on
-phones) holds playback, scenario and fleet controls, live state, run metrics with CSV export,
+vehicles, drawn far to near and interpolated between steps. The panel (on phones a second
+full-screen page beside the map, turned to by a swipe or flick left and back by a swipe right) holds playback, scenario and fleet controls, live state, run metrics with CSV export,
 chokepoints, the event log and the key.
 
 `viewer.html` is the street map on its own, with street inspection and a car-vs-shuttle route

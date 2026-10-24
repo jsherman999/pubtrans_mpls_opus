@@ -67,7 +67,9 @@ modelled). Tap a stop to see who is waiting there.
 
 ![Riding along with a shuttle on South 8th Street, the IDS Tower ahead](docs/img/pov.jpg)
 
-The panel (a bottom sheet on phones) has:
+The panel has (on phones it is a second full-screen page to the right of the map: swipe left
+from the right edge, flick the map left or tap the **Stats & controls** tab to turn to it, and
+swipe it right or tap **‹ Map** to go back; a slow drag still pans the map):
 
 - **Playback:** speed from 1× (30× real time) up, reset, trigger an emergency.
 - **Scenario:** day of the week, people per agent, share of car trips kept, transit replaced or
@@ -76,7 +78,7 @@ The panel (a bottom sheet on phones) has:
   empty share, occupancy, utilisation, wait and ride percentiles) with CSV downloads, the
   **Chokepoints** (river bridges, freeway ramps, map-edge entries) and an event log.
 
-<img src="docs/img/phone.jpg" width="260" alt="The simulation on a phone in dark mode, the map above and the controls in a bottom sheet">
+<img src="docs/img/phone.jpg" width="260" alt="The simulation on a phone in dark mode: the map fills the screen, with a Stats and controls tab on the right edge"> <img src="docs/img/phone-panel.jpg" width="260" alt="The panel page on a phone after swiping left: playback and live state, scrolling up and down, with a Map button at the top">
 
 `viewer.html` is the street map on its own: tap a street for its speed, lanes, direction and
 OSM way, or **Plan a route** to compare the fastest car route with the fastest shuttle route.
