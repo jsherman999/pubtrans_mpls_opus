@@ -66,7 +66,7 @@ function element(id) {
       set: new Set(),
       add(c) { this.set.add(c); }, remove(c) { this.set.delete(c); },
       contains(c) { return this.set.has(c); },
-      toggle(c) { if (this.set.has(c)) { this.set.delete(c); return false; } this.set.add(c); return true; },
+      toggle(c, force) { const on = force === undefined ? !this.set.has(c) : !!force; if (on) this.set.add(c); else this.set.delete(c); return on; },
     },
     addEventListener(t, fn) { (listeners[t] = listeners[t] || []).push(fn); },
     fire(t, ev) { (listeners[t] || []).forEach((fn) => fn(ev)); },
@@ -102,8 +102,9 @@ function runViewer({ withRealData }) {
     performance: { now: () => Date.now() },
     requestAnimationFrame: (fn) => rafQueue.push(fn),
     getComputedStyle: () => ({ getPropertyValue: () => " #123456" }),
-    matchMedia: () => ({ addEventListener() {} }),
+    matchMedia: (q) => ({ matches: q.includes("max-width: 760px"), addEventListener() {} }),   // phone layout
     devicePixelRatio: 3,
+    innerWidth: 390,
     addEventListener() {},
     document: {
       documentElement: {},
@@ -128,6 +129,7 @@ function runViewer({ withRealData }) {
   vm.runInContext(read("src/graph.js"), sandbox);
   vm.runInContext(read("src/routing.js"), sandbox);
   vm.runInContext(read("src/mapview.js"), sandbox);
+  vm.runInContext(read("src/pages.js"), sandbox);
   vm.runInContext(inline, sandbox);
   const flush = () => { while (rafQueue.length) rafQueue.shift()(); };
   return new Promise((resolve) => setTimeout(() => { flush(); resolve({ sandbox, els, calls, flush, errors }); }, 20));
@@ -209,9 +211,33 @@ function runViewer({ withRealData }) {
   assert.ok(v.trip.to === -1 && !v.trip.car, "a third tap starts a new trip");
   els.routeToggle.fire("click");
   assert.ok(!v.trip.on && !els.routePanel.classList.contains("open"));
+  // Phone pages: the title card is a full-screen page beside the map, opened by the tab, a swipe
+  // left from the right edge or a flick of the map, and closed by its Map button or a swipe right.
+  const isOpen = () => els.title.classList.contains("open");
+  const swipe = (el, pts) => {
+    const at = ([x, y, t]) => ({ clientX: x, clientY: y, offsetX: x, offsetY: y, timeStamp: t, pointerId: 9, target: el });
+    el.fire("pointerdown", at(pts[0]));
+    for (const p of pts.slice(1)) el.fire("pointermove", at(p));
+    el.fire("pointerup", { type: "pointerup", ...at(pts[pts.length - 1]) });
+  };
+  assert.ok(!isOpen() && els.title.inert, "info page starts off-screen and out of the tab order");
+  els.statsTab.fire("click");
+  assert.ok(isOpen() && !els.title.inert && els.sheetToggle.attrs["aria-expanded"] === "true", "tab opens the info page");
+  els.sheetToggle.fire("click");
+  assert.ok(!isOpen(), "Map button closes it");
+  swipe(els.swipeEdge, [[385, 400, 0], [370, 402, 30], [300, 405, 80], [240, 405, 130]]);
+  assert.ok(isOpen(), "swipe left from the edge opens the info page");
+  swipe(els.title, [[60, 300, 1000], [80, 301, 1030], [150, 305, 1080], [220, 305, 1130]]);
+  assert.ok(!isOpen(), "swipe right shows the map");
+  const ox = view.ox;
+  swipe(els.map, [[300, 400, 2000], [250, 402, 2040], [180, 404, 2090]]);
+  assert.ok(isOpen() && view.ox === ox, "a quick flick left on the map opens the info page and leaves the map where it was");
+  els.sheetToggle.fire("click");
+  swipe(els.map, [[300, 400, 3000], [280, 401, 3300], [200, 402, 3900]]);
+  assert.ok(!isOpen() && view.ox !== ox, "a slow drag on the map pans it");
   assert.deepStrictEqual(errors, []);
   // Real data path: no sample notice.
   const real = await runViewer({ withRealData: true });
   assert.strictEqual(real.els.sampleNotice.hidden, true);
-  console.log("PASS: viewer loads with fallback, fits a phone screen, zooms, labels, picks, pans, refits and previews routes.");
+  console.log("PASS: viewer loads with fallback, fits a phone screen, zooms, labels, picks, pans, refits, previews routes and swipes to the info page.");
 })().catch((e) => { console.error(e); process.exit(1); });

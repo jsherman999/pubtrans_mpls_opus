@@ -28,6 +28,7 @@ src/                  browser + Node modules, no dependencies, loaded with <scri
   mapview.js          zoomable canvas map shared by both pages
   buildings.js        footprint decoding, spatial index, landmark designs
   pov.js              driver's-seat perspective view
+  pages.js            phone layout shared by both pages: map and panel as swipeable pages
 tools/                offline builds (Python, standard library) and Node runners
   build_osm.py        OpenStreetMap streets      -> data/mpls_graph.js
   build_demand.py     Census blocks, LODES, OSM parking -> data/mpls_demand.js
@@ -108,12 +109,13 @@ street, signals per approach, places and waiting counts, and vehicles (dots far 
 shapes up close, sampled cars as several cars nose to tail). Picking inverts the view transform.
 **Ride along** opens the driver's-seat view (`src/pov.js`): roads, extruded buildings with
 back-face and distance culling, the skyline out to 1.5 km, landmark designs and nearby
-vehicles, drawn far to near and interpolated between steps. The panel (on phones a second
-full-screen page beside the map, turned to by a swipe or flick left and back by a swipe right) holds playback, scenario and fleet controls, live state, run metrics with CSV export,
-chokepoints, the event log and the key.
+vehicles, drawn far to near and interpolated between steps. The panel holds playback, scenario and
+fleet controls, live state, run metrics with CSV export, chokepoints, the event log and the key.
+On phones it is a second full-screen page beside the map (`src/pages.js`), turned to by a swipe
+or flick left and back by a swipe right.
 
 `viewer.html` is the street map on its own, with street inspection and a car-vs-shuttle route
-preview.
+preview. On phones its title card (area, key, links) is the second page in the same way.
 
 ## Performance (desktop, Apple silicon)
 

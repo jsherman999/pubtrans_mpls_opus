@@ -40,7 +40,7 @@ const html = read("index.html");
 const inline = html.split("<script>")[1].split("</script>")[0];
 const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
 assert.deepStrictEqual(scripts, ["data/mpls_graph.js", "data/mpls_demand.js", "src/graph.js", "src/routing.js", "src/traffic.js",
-  "src/motion.js", "src/congestion.js", "src/demand.js", "src/metrics.js", "src/sim.js", "src/mapview.js", "src/buildings.js", "src/pov.js"],
+  "src/motion.js", "src/congestion.js", "src/demand.js", "src/metrics.js", "src/sim.js", "src/mapview.js", "src/buildings.js", "src/pov.js", "src/pages.js"],
   "page loads the data and engine modules in order");
 
 // Boot the page headless. Without data/mpls_demand.js it runs the placeholder demand.

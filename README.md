@@ -82,6 +82,8 @@ swipe it right or tap **‹ Map** to go back; a slow drag still pans the map):
 
 `viewer.html` is the street map on its own: tap a street for its speed, lanes, direction and
 OSM way, or **Plan a route** to compare the fastest car route with the fastest shuttle route.
+On phones the area summary, key and links are a second page beside the map, reached the same
+way as the simulation's panel (the **Info & key** tab, a swipe from the right edge or a flick).
 
 ![The street map viewer](docs/img/viewer.jpg)
 

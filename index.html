@@ -365,6 +365,7 @@
 <script src="src/mapview.js"></script>
 <script src="src/buildings.js"></script>
 <script src="src/pov.js"></script>
+<script src="src/pages.js"></script>
 <script>
 "use strict";
 
@@ -419,7 +420,7 @@ function start(graph) {
   const { view, theme } = map;
   const syncPanelWidth = () => document.documentElement.style.setProperty("--panel-w", phone() ? "0px" : (panel.offsetWidth || 0) + "px");
   syncPanelWidth();
-  addEventListener("resize", () => { syncPanelWidth(); setPanelOpen(panelOpen); map.requestDraw(); });
+  addEventListener("resize", () => { syncPanelWidth(); pages.setOpen(pages.open); map.requestDraw(); });
 
   // Signal heads: a dot just before each signalized stop line, coloured by its phase.
   const signalArcs = sim.router.arcs.filter((a) => a.signal === 0 || a.signal === 1);
@@ -864,83 +865,9 @@ function start(graph) {
   $("logPause").addEventListener("click", () => { logPaused = !logPaused; $("logPause").setAttribute("aria-pressed", String(logPaused)); $("logPause").textContent = logPaused ? "Resume log" : "Pause log"; });
 
   // ---------------------------------------------------------------- phone pages
-  // On phones the panel is a full-screen page to the right of the map. Swipe left from the
-  // right edge, flick the map left or tap the Stats tab to turn to it; swipe it right to go back.
-  // A slow drag on the map still pans it.
-  let panelOpen = false, panelDragging = false, swipedAt = -1e9;
-  function setPanelOpen(open) {
-    panelOpen = open;
-    panel.classList.toggle("open", open);
-    panel.style.transform = ""; panel.style.transition = "";
-    panel.inert = phone() && !open;
-    $("sheetToggle").setAttribute("aria-expanded", String(open));
-    $("statsTab").setAttribute("aria-expanded", String(open));
-    if (open) { drawCharts(); if (sim.state.plan) drawPlan(); }
-  }
-  setPanelOpen(false);
-  // The panel follows a horizontal drag on `el`; on release it settles open or closed.
-  function swipePanel(el, opening, accept) {
-    let start = null, last = null, vx = 0;
-    el.addEventListener("pointerdown", (e) => {
-      start = phone() && panelOpen !== opening && (!accept || accept(e)) ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null;
-      last = { x: e.clientX, t: e.timeStamp }; vx = 0;
-    });
-    el.addEventListener("pointermove", (e) => {
-      if (!start || e.pointerId !== start.id) return;
-      const dx = e.clientX - start.x, dy = e.clientY - start.y;
-      if (!panelDragging) {
-        if (Math.hypot(dx, dy) < 10) return;
-        // Vertical, or the wrong way: not a page swipe (the panel scrolls, the tab ignores it).
-        if (Math.abs(dx) < Math.abs(dy) * 1.2 || (opening ? dx > 0 : dx < 0)) { start = null; return; }
-        panelDragging = true;
-        if (el.setPointerCapture) el.setPointerCapture(e.pointerId);
-        panel.style.transition = "none";
-      }
-      const w = innerWidth;
-      panel.style.transform = `translateX(${Math.max(0, Math.min(w, (opening ? w : 0) + dx))}px)`;
-      const dt = e.timeStamp - last.t;
-      if (dt > 0) vx = (e.clientX - last.x) / dt;
-      last = { x: e.clientX, t: e.timeStamp };
-    });
-    const end = (e) => {
-      if (!start || e.pointerId !== start.id) return;
-      if (panelDragging) {
-        const dx = e.clientX - start.x, w = innerWidth, cancelled = e.type === "pointercancel";
-        const flung = opening ? dx < -w * 0.25 || vx < -0.4 : dx > w * 0.25 || vx > 0.4;
-        panelDragging = false; swipedAt = performance.now();
-        setPanelOpen(cancelled ? panelOpen : flung === opening);
-      }
-      start = null;
-    };
-    el.addEventListener("pointerup", end);
-    el.addEventListener("pointercancel", end);
-    // A swipe that ends over a button is not a press of it.
-    el.addEventListener("click", (e) => { if (performance.now() - swipedAt < 400) { e.stopPropagation(); e.preventDefault(); } }, true);
-  }
-  swipePanel($("swipeEdge"), true);
-  swipePanel(panel, false, (e) => !(e.target && e.target.closest && e.target.closest("input[type=range], select")));
-  $("statsTab").addEventListener("click", () => setPanelOpen(true));
-  $("sheetToggle").addEventListener("click", () => setPanelOpen(!panelOpen));
-  // A quick leftward flick on the map turns to the panel and undoes the pan it caused.
-  {
-    let down = 0, flick = null;
-    $("map").addEventListener("pointerdown", (e) => {
-      down++;
-      flick = down === 1 && phone() ? { x: e.clientX, y: e.clientY, t: e.timeStamp, ox: view.ox, oy: view.oy } : null;
-    });
-    const up = (e) => {
-      down = Math.max(0, down - 1);
-      const f = flick; flick = null;
-      if (!f || e.type !== "pointerup") return;
-      const dx = e.clientX - f.x, dy = e.clientY - f.y, dt = Math.max(1, e.timeStamp - f.t);
-      if (dx < -60 && Math.abs(dx) > 2 * Math.abs(dy) && dt < 250 && -dx / dt > 0.5) {
-        view.ox = f.ox; view.oy = f.oy; map.requestDraw();
-        setPanelOpen(true);
-      }
-    };
-    $("map").addEventListener("pointerup", up);
-    $("map").addEventListener("pointercancel", up);
-  }
+  // On phones the panel is a full-screen page to the right of the map (src/pages.js).
+  const pages = MplsPages.createPages({ panel, edge: $("swipeEdge"), tab: $("statsTab"), back: $("sheetToggle"),
+    canvas: $("map"), mapView: map, isPhone: phone, onChange: (open) => { if (open) { drawCharts(); if (sim.state.plan) drawPlan(); } } });
 
   // ---------------------------------------------------------------- HUD
   const fmtMin = (m) => (m == null ? "—" : `${m.toFixed(1)} min`);
@@ -1188,7 +1115,7 @@ function start(graph) {
       const p = sim.locate(selected);
       if (p) map.centerOn(p.x, p.y);
     }
-    if (!(panelOpen && !panelDragging && phone())) map.draw();   // the panel covers the whole map
+    if (!(pages.open && !pages.dragging && phone())) map.draw();   // the panel covers the whole map
     if (t0 - lastHud > 250 || paused) { refresh(); lastHud = t0; }
     const ms = performance.now() - t0;
     perfEMA = perfEMA ? perfEMA * 0.9 + ms * 0.1 : ms;
