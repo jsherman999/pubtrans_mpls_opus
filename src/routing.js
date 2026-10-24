@@ -273,9 +273,8 @@
       return best;
     }
 
-    // Fastest routes from every node to `to` in one backward Dijkstra. Per node: `length` (m) of
-    // that route (Infinity where `to` cannot be reached) and `next`, the first arc to take (-1 at
-    // `to` and where unreachable); pathTo() follows it. Same rules as search(): mode, no passing
+    // Fastest routes from every node to `to` in one backward Dijkstra. Per node: `next`, the first
+    // arc to take (-1 at `to` and where unreachable); pathTo() and pathLength() follow it. Same rules as search(): mode, no passing
     // through portals, no bans or extra costs. One tree answers every trip into a busy stop
     // (ride-sharing detours, dispatch legs) instead of hundreds of point-to-point searches.
     let inStart = null, inArcs = null;
@@ -289,11 +288,11 @@
         const fill = inStart.slice(0, N);
         for (let i = 0; i < A; i++) inArcs[fill[arcTo[i]]++] = i;
       }
-      const time = new Float64Array(N).fill(Infinity), length = new Float32Array(N).fill(Infinity);
-      const next = new Int32Array(N).fill(-1);
+      const time = new Float64Array(N).fill(Infinity);
+      const next = (A < 32768 ? new Int16Array(N) : new Int32Array(N)).fill(-1);   // compact: trees are kept by the hundred
       const done = new Uint8Array(N);
       heap.clear();
-      time[to] = 0; length[to] = 0;
+      time[to] = 0;
       heap.push(to, 0);
       while (heap.n) {
         const v = heap.pop();
@@ -305,11 +304,19 @@
           const i = inArcs[k];
           if (arcPsvOnly[i] && mode !== MODE_PSV) continue;
           const u = arcFrom[i], nt = tv + arcTime[i];
-          if (nt < time[u]) { time[u] = nt; length[u] = length[v] + arcLen[i]; next[u] = i; heap.push(u, nt); }
+          if (nt < time[u]) { time[u] = nt; next[u] = i; heap.push(u, nt); }
         }
       }
       stats.trees = (stats.trees || 0) + 1;
-      return { to, mode, length, next };
+      return { to, mode, next };
+    }
+    // Length (m) of the tree's route from `from`, Infinity if `to` cannot be reached.
+    function pathLength(tree, from) {
+      if (from === tree.to) return 0;
+      if (tree.next[from] < 0) return Infinity;
+      let length = 0;
+      for (let v = from; v !== tree.to;) { const i = tree.next[v]; length += arcLen[i]; v = arcTo[i]; }
+      return length;
     }
     // Route from `from` along a treeTo() tree, in the same shape as search() results.
     function pathTo(tree, from) {
@@ -375,7 +382,7 @@
 
     return {
       arcs, arcCount: A, maxSpeedMps: maxMps,
-      route, search, kShortest, invalidate, routePoints, nearestNode, connectedCore, treeTo, pathTo,
+      route, search, kShortest, invalidate, routePoints, nearestNode, connectedCore, treeTo, pathTo, pathLength,
       get epoch() { return epoch; },
       stats,
     };

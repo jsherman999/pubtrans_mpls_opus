@@ -18,7 +18,7 @@ const { tiny } = require("./fixtures/tiny.cjs");
 
 function world(g, sigOpts = {}) {
   const router = R.createRouter(g);
-  const signals = T.createSignals(g, sigOpts);
+  const signals = T.createSignals(g, { split: false, ...sigOpts });   // the source's 30/30 timing
   const motion = M.createMotion(g, router, signals);
   return { g, router, signals, motion };
 }
@@ -222,6 +222,37 @@ function assertClean(motion, list) {
   assert.strictEqual(k.motion.occupancy[arcOf(k.router, 2, 3)], 11, "street beyond fills (80 m at 8 m spacing)");
   assert.ok(k.motion.occupancy[arcOf(k.router, 0, 1)] >= 12, "the queue waits before the box");
   console.log(`PASS: two approaches share a merge (${Math.round(share * 100)} / ${Math.round((1 - share) * 100)}), and nobody waits inside a short intersection arc when the street beyond is full.`);
+}
+
+// ------------------------------------------------------------ gridlock relief
+{
+  // A one-way ring of four 50 m blocks, every block full of cars that want to go round it:
+  // nobody can ever move (true gridlock). After 5 minutes cars jump ahead along their routes.
+  const ring = tiny([[0, 0], [50, 0], [50, 50], [0, 50]], [0, 1, 2, 3].map((i) => ({ a: i, b: (i + 1) % 4 })));
+  for (const jamTime of [Infinity, 300]) {
+    const router = R.createRouter(ring);
+    const motion = M.createMotion(ring, router, T.createSignals(ring), { jamTime });
+    const ringArcs = [0, 1, 2, 3].map((i) => arcOf(router, i, (i + 1) % 4));
+    const cars = [];
+    // Fill each block from the back: 7 cars at 8 m spacing in 50 m (the last at its start).
+    for (let i = 0; i < 4; i++) for (let k = 0; k < 7; k++) {
+      const v = vehicle(`r${i}-${k}`);
+      motion.place(v, i);
+      const route = [];
+      for (let j = 0; j < 6; j++) route.push(ringArcs[(i + j) % 4]);
+      motion.setRoute(v, route);
+      cars.push(v);
+    }
+    // Let them settle into the ring, then run 30 minutes.
+    let arrived = 0;
+    for (let t = 0; t < 1800; t += 3) { arrived += motion.step(cars, t, 3).length; assertClean(motion, cars); }
+    if (jamTime === Infinity) assert.ok(arrived < 28 && motion.stats.jumps === 0, `without relief the ring locks up (${arrived} of 28 arrived)`);
+    else {
+      assert.strictEqual(arrived, 28, "with relief everyone gets through");
+      assert.ok(motion.stats.jumps > 0 && motion.stats.jumps <= 28, `jumps ${motion.stats.jumps}`);
+      console.log(`PASS: a full one-way ring locks up without relief; after 5 minutes stuck, ${motion.stats.jumps} cars jump ahead and all 28 arrive.`);
+    }
+  }
 }
 
 // ------------------------------------------------------------ random stress on a signalized synthetic grid

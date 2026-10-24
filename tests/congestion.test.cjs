@@ -25,14 +25,14 @@ const { tiny } = require("./fixtures/tiny.cjs");
     [{ a: 0, b: 1, cls: 1, lf: 3 }, { a: 1, b: 2 }, { a: 2, b: 4, sigB: 0 }, { a: 1, b: 3 }, { a: 3, b: 4 }, { a: 4, b: 5, cls: 1, lf: 2 }],
     1, ["residential", "primary"]);
   const router = R.createRouter(g);
-  const signals = T.createSignals(g, { offsets: [0] });
+  const signals = T.createSignals(g, { offsets: [0], split: false });
   const motion = M.createMotion(g, router, signals);
   const cong = C.createCongestion(g, router, motion, signals);
   const arc = (a, b) => router.arcs.findIndex((x) => x.from === a && x.to === b);
   const OS = arc(0, 1), SA = arc(1, 2), AT = arc(2, 4), SB = arc(1, 3);
   assert.strictEqual(cong.capacity[OS], 3 * 1800, "3 primary lanes: 5,400 cars an hour");
   assert.strictEqual(cong.capacity[SA], 1500, "a residential lane: 1,500 cars an hour");
-  assert.ok(Math.abs(cong.capacity[AT] - 1500 * signals.green / signals.cycle) < 1e-9, "a signal approach gets its green share");
+  assert.ok(Math.abs(cong.capacity[AT] - 1500 * signals.greenFor(router.arcs[AT]) / signals.cycle) < 1e-9, "a signal approach gets its green share");
 
   const run = (congestionRouting) => {
     const m = M.createMotion(g, router, signals), c = C.createCongestion(g, router, m, signals);

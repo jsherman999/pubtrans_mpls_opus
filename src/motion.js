@@ -9,6 +9,10 @@
 // (front first), so per-direction lane occupancy replaces the source's edgeKey(a, b) claims.
 // Each lane's stop line discharges at most one vehicle per saturation headway (lane capacity
 // from the road class, Phase 4), and the first vehicle away from a red loses a start-up time.
+// Gridlock relief, as in SUMO's time-to-teleport: a vehicle that has been unable to move into
+// the next arc for `jamTime` seconds (300 by default) because the road beyond is full jumps
+// ahead to the first arc of its route with room, so a ring of full blocks cannot freeze forever.
+// Jumps are counted; many of them mean demand far beyond what the streets can carry.
 // Merges are first come, first served: the lane (or curb) that has waited longest to join an arc
 // holds a claim on it, and others yield, so a side lane is never starved by a busier one.
 //
@@ -19,9 +23,9 @@
 //   node         node the vehicle is parked at while off the road
 //   hold         seconds left of a stop-sign hold; cleared marks the hold as served
 //   speedFactor  optional multiplier on posted speed (default 1)
-//   pcu          vehicles this one stands for (default 1): it takes pcu × the following gap of
-//                lane space and pcu × the saturation headway at stop lines, so a sampled car
-//                (one agent for several real cars) loads the road like all of them
+//   pcu          vehicles this one stands for (default 1): it takes pcu × the saturation headway
+//                at stop lines and up to storagePcu × the following gap of lane space, so a
+//                sampled car (one agent for several real cars) loads the road like all of them
 //   passTag      closure tag this vehicle may drive through (responders at their own incident)
 //   lastArc      arc the vehicle arrived on (set on arrival); odo, meters driven
 //   waiting      why the vehicle stopped short this step: "queue", "signal", "stop",
@@ -45,9 +49,16 @@
 
   function createMotion(graph, router, signals, opts = {}) {
     const gap = opts.gap ?? GAP;
-    let maxPcu = 1;                          // largest pcu seen, bounds the lookahead
-    const space = (v) => gap * (v.pcu || 1);   // lane length a vehicle takes, front to front
+    // Lane space an agent takes, front to front. Stop-line time scales with the full pcu, but
+    // space only up to storagePcu cars: an agent standing for 20 cars would be 160 m long, longer
+    // than a downtown block, and lock the grid by length alone. Large-scale traffic models scale
+    // storage less than flow for small samples for the same reason (MATSim's storage factor).
+    const storagePcu = opts.storagePcu ?? 4;
+    const space = (v) => gap * Math.min(v.pcu || 1, storagePcu);
+    let maxPcu = 1;                          // largest stored pcu seen, bounds the lookahead
     const stopHold = opts.stopHold ?? 3;
+    const jamTime = opts.jamTime ?? 300;
+    const stats = { jumps: 0 };
     const arcs = router.arcs;
     const A = arcs.length;
     const len = new Float64Array(A), mps = new Float64Array(A), laneCount = new Uint8Array(A);
@@ -142,7 +153,7 @@
       lanesOf(a)[k].push(v);
       occupancy[a]++;
       entries[a] += v.pcu || 1;
-      if (v.pcu > maxPcu) maxPcu = v.pcu;
+      if (Math.min(v.pcu || 1, storagePcu) > maxPcu) maxPcu = Math.min(v.pcu || 1, storagePcu);
       v.lane = k; v.s = 0; v.cleared = false; v.hold = 0;
     }
 
@@ -225,8 +236,11 @@
             v.waiting = "queue";
             // Held short of the line by traffic just past the node: waiting to merge all the same.
             if (ahead < 0 && v.ri + 1 < v.route.length) {
-              if (v.lineSince == null) v.lineSince = t0 + dt - remaining;
+              const now = t0 + dt - remaining;
+              if (v.lineSince == null) v.lineSince = now;
               holdClaim(v.route[v.ri + 1], laneBase[a] + v.lane, v.lineSince);
+              if (v.jamSince == null) v.jamSince = now;
+              else if (now - v.jamSince >= jamTime && k === 0) jump(v);
             }
           }
           break;
@@ -285,10 +299,17 @@
           for (const u of lanes[next][lane]) inside += space(u);
           if (beyond - inside < 0) room = -1;
         }
-        if (room < 0) { holdClaim(next, li, v.lineSince); v.waiting = "queue"; break; }
+        if (room < 0) {
+          holdClaim(next, li, v.lineSince);
+          v.waiting = "queue";
+          const now = t0 + dt - remaining;
+          if (v.jamSince == null) v.jamSince = now;
+          else if (now - v.jamSince >= jamTime) jump(v);
+          break;
+        }
         if (!mayMerge(next, li, v.lineSince)) { v.waiting = "queue"; break; }
         releaseClaim(next, li);
-        v.lineSince = null;
+        v.lineSince = null; v.jamSince = null;
         laneFree[li] = t0 + dt - remaining + headway[a] * (v.pcu || 1);
         leaveLane(v);
         v.ri++;
@@ -297,6 +318,28 @@
       return done(v);
     }
     function done(v) { v.due = 0; v.busy = false; }
+
+    // Gridlock relief: move a jammed lane-front vehicle to the first arc ahead on its route that
+    // is open and has room, or to the end of its route.
+    function jump(v) {
+      for (let j = v.ri + 1; j < v.route.length; j++) {
+        const a = v.route[j];
+        if (blocked(v, a)) return;            // never past a closure
+        if (len[a] < KEEP_CLEAR && j < v.route.length - 1) continue;   // nor into an intersection's inside
+        if (entryRoom(a) >= 0) {
+          const lane = pickLane;
+          leaveLane(v); v.ri = j; enter(v, a, lane);
+          v.jamSince = null; v.lineSince = null; v.jumps = (v.jumps || 0) + 1; stats.jumps++;
+          return;
+        }
+      }
+      const last = v.route[v.route.length - 1];
+      v.node = arcs[last].to; v.lastArc = last; v.arrivedAt = t0 + dt;
+      leaveLane(v);
+      v.route = null; v.ri = 0; v.jamSince = null; v.lineSince = null;
+      v.jumps = (v.jumps || 0) + 1; stats.jumps++;
+      arrivals.push(v);
+    }
 
     // Advance every vehicle in `list` from time t by dt seconds. Returns the vehicles that
     // reached the end of their route during the step, in the order they arrived. Vehicles are
@@ -401,7 +444,7 @@
     }
 
     return {
-      gap, lanes, occupancy, closed, laneCount, len, headway, entries, controlled,
+      gap, lanes, occupancy, closed, laneCount, len, headway, entries, controlled, stats, storagePcu,
       place, setRoute, remove, step, setClosed, currentArc, locate, check, checkRoute,
     };
   }

@@ -1,0 +1,72 @@
+{
+  "format_version": 1,
+  "lodes_year": 2023,
+  "blocks_in_box": 1143,
+  "zones_kept": 822,
+  "residents": 114464,
+  "housing_units": 60533,
+  "jobs": 226448,
+  "jobs_by_group": {
+    "office": 118729,
+    "retail": 4599,
+    "food": 16763,
+    "health": 26019,
+    "edu": 30911
+  },
+  "commuters": {
+    "internal": 16833,
+    "inbound": 209615,
+    "outbound": 31606,
+    "inbound_unplaced": 0,
+    "od_vs_wac_jobs": 1.0
+  },
+  "inbound_by_sector": [
+    14860,
+    10662,
+    6149,
+    7270,
+    14043,
+    14306,
+    9072,
+    11933,
+    20168,
+    16411,
+    16772,
+    13554,
+    8585,
+    12781,
+    17120,
+    15929
+  ],
+  "outbound_by_sector": [
+    1615,
+    1174,
+    1363,
+    1138,
+    1636,
+    2903,
+    918,
+    1695,
+    3829,
+    3464,
+    3109,
+    2279,
+    1844,
+    1413,
+    1776,
+    1450
+  ],
+  "downtown": {
+    "residents": 35696,
+    "jobs": 155556
+  },
+  "internal_od_pairs": 10296,
+  "parking": {
+    "facilities": 877,
+    "spaces": 171561,
+    "ramps": 90,
+    "spaces_estimated": 155932
+  },
+  "warnings": [],
+  "output_bytes": 222877
+}

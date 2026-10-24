@@ -11,6 +11,7 @@
   const T = isNode ? require("./traffic.js") : root.MplsTraffic;
   const M = isNode ? require("./motion.js") : root.MplsMotion;
   const C = isNode ? require("./congestion.js") : root.MplsCongestion;
+  const Dm = isNode ? require("./demand.js") : root.MplsDemand;
   const { MODE_GENERAL, MODE_PSV } = R;
 
   const STEP = 3;                       // s, fixed simulation step (source SIM_MIN_PER_TICK)
@@ -53,6 +54,15 @@
     amPeak: 3,                          // extra arrivals at 08:00, × the base rate (×4 in all)
     throughPeak: 0.8,                   // extra freeway through-traffic at 08:00, × the base rate
     congestionRouting: true,            // routes and drivers in queues avoid congested streets
+    // Census/LODES demand (data/mpls_demand.js via src/demand.js) replaces the placeholder
+    // places and population when given. Everything that moves is then sampled: one rider,
+    // shuttle or car agent stands for `sampling` real ones and takes their road space.
+    demand: null,
+    sampling: 20,
+    day: 2,                             // 0 = Monday ... 6 = Sunday
+    carShare: 0.5,                      // share of today's car trips still made by private car;
+                                        // the rest switch to SDEV shuttles (most cars replaced)
+    demandFleet: { sedans: 60, shuttles: 260, buses: 60 },   // agents (× sampling real vehicles)
     rareEvents: true,
   };
 
@@ -66,7 +76,15 @@
   }
 
   function createSim(graph, options = {}) {
+    options = Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined));   // undefined means default
     const opts = { ...DEFAULTS, ...options, places: { ...DEFAULTS.places, ...(options.places || {}) } };
+    const demand = opts.demand ? (opts.demand.generate ? opts.demand : Dm.createDemand(opts.demand)) : null;
+    if (demand) {
+      for (const k of ["sedans", "shuttles", "buses"]) if (options[k] == null) opts[k] = opts.demandFleet[k];
+      opts.trafficScale = opts.sampling;
+    }
+    const scale = demand ? opts.sampling : 1;            // real people or vehicles per agent
+    const dayStart = opts.dayStart ?? (demand ? Dm.DEFAULTS.dayStart : DAY_START);
     const router = options.router || R.createRouter(graph);
     const signals = T.createSignals(graph, { seed: opts.seed });
     const motion = M.createMotion(graph, router, signals);
@@ -80,6 +98,7 @@
     const settings = {
       population: opts.population, sedans: opts.sedans, shuttles: opts.shuttles, buses: opts.buses,
       rideSharing: opts.rideSharing, privateTraffic: opts.privateTraffic,
+      day: opts.day, events: opts.events ?? (demand ? Dm.DEFAULTS.events : []), carShare: opts.carShare,
     };
 
     // ------------------------------------------------------------------ geography
@@ -164,15 +183,90 @@
     const exitWeight = edgeWeight(localExits.map((v) => graph.inc[v].filter((a) => !a.psvOnly)));
     const throughWeight = edgeWeight(throughRoutes.map((r) => [arcs[r.arcs[0]]]));
 
+    // ------------------------------------------------------------------ Census demand geography
+    // Blocks snap to the nearest curbside node in the core; blocks sharing a node form one
+    // place. Trips from outside the area arrive in the compass sector of home (src/demand.js):
+    // drivers at a map-edge entry in that sector, shuttle riders at its edge hub, the curb
+    // nearest that entry (a transfer point from regional service, like a park and ride).
+    const SECTORS = 16;
+    const cx = graph.width / 2, cy = graph.height / 2;
+    const sectorOfNode = (v) => {
+      const b = (Math.atan2(nx[v] - cx, cy - ny[v]) * 180 / Math.PI + 360) % 360;
+      return Math.floor((b + 360 / SECTORS / 2) / (360 / SECTORS)) % SECTORS;
+    };
+    let zoneNode = null, zonePlaceOf = null, demandPlaces = [], hubPlaces = [], sectorEntries = null, sectorExits = null;
+    const hubByPortal = new Map();   // map-edge entry or exit -> its edge hub
+    let parkingLots = [], zoneLots = [];
+    if (demand) {
+      zoneNode = demand.zones.map((z) => nearestCurb(z.x, z.y));
+      const byNode = new Map();
+      demand.zones.forEach((z, i) => {
+        const node = zoneNode[i];
+        let p = byNode.get(node);
+        if (!p) { p = { node, x: nx[node], y: ny[node], pop: 0, units: 0, jobs: 0, shops: 0, campus: false, zones: [] }; byNode.set(node, p); }
+        p.pop += z.pop; p.units += z.hu; p.jobs += z.jobs; p.shops += z.retail + z.food; p.zones.push(i);
+        if (demand.campusOf[i] >= 0) p.campus = true;
+      });
+      for (const p of byNode.values()) {
+        p.type = p.campus && p.jobs > p.pop ? "school" : p.pop >= p.jobs ? "residential" : p.shops > 0.3 * p.jobs ? "grocery" : "employer";
+        demandPlaces.push(p);
+      }
+      const sides = (list, weights) => {
+        const per = Array.from({ length: SECTORS }, () => ({ portals: [], cum: [] }));
+        list.forEach((v, i) => { const s = per[sectorOfNode(v)]; s.portals.push(v); s.cum.push((s.cum.at(-1) || 0) + (weights[i] - (weights[i - 1] || 0))); });
+        // A sector with no road out borrows its nearest neighbour's.
+        for (let k = 0; k < SECTORS; k++) if (!per[k].portals.length)
+          for (let d = 1; d < SECTORS; d++) { const j = [(k + d) % SECTORS, (k - d + SECTORS) % SECTORS].find((q) => per[q].portals.length && !per[q].borrowed); if (j != null) { per[k] = { ...per[j], borrowed: true }; break; } }
+        return per;
+      };
+      sectorEntries = sides(localEntries, entryWeight);
+      sectorExits = sides(localExits, exitWeight);
+      const hubOf = new Map();
+      for (const v of [...localEntries, ...localExits]) {
+        const node = nearestCurb(nx[v], ny[v]);
+        if (!hubOf.has(node)) hubOf.set(node, { node, x: nx[node], y: ny[node], type: "station", hub: true, portals: [] });
+        hubOf.get(node).portals.push(v);
+      }
+      hubPlaces = [...hubOf.values()];
+      for (const h of hubPlaces) for (const v of h.portals) hubByPortal.set(v, h);
+      zonePlaceOf = (z) => byNode.get(zoneNode[z]);
+      // Parking: OSM ramps and lots, snapped to the curb and merged per node. Car trips into a
+      // zone end at a facility near it (the driver walks the rest); trips out of a zone start
+      // from one where cars are parked.
+      const lots = new Map();
+      for (const f of demand.raw.parking || []) {
+        const node = nearestCurb(f.x, f.y);
+        let lot = lots.get(node);
+        if (!lot) { lot = { node, x: nx[node], y: ny[node], capacity: 0, names: [], ramp: false }; lots.set(node, lot); }
+        lot.capacity += f.capacity;
+        if (f.name) lot.names.push(f.name);
+        if (f.kind === "multi-storey" || f.kind === "underground") lot.ramp = true;
+      }
+      parkingLots = [...lots.values()].filter((l) => l.capacity >= 50);
+      // Each zone's candidate lots: up to 8 within 600 m, nearest first.
+      zoneLots = demand.zones.map((z) => parkingLots
+        .map((l) => ({ l, d: Math.hypot(l.x - z.x, l.y - z.y) }))
+        .filter((c) => c.d <= 600).sort((a, b) => a.d - b.d).slice(0, 8));
+    }
+    const pickPortal = (side, sector) => { const s = side[sector]; return s.portals.length ? s.portals[pickCumIndex(s.cum)] : null; };
+    function pickCumIndex(cum) {
+      const x = rng() * cum[cum.length - 1];
+      let lo = 0, hi = cum.length - 1;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] > x) hi = m; else lo = m + 1; }
+      return lo;
+    }
+
     // ------------------------------------------------------------------ state
     let rng, S;
     function freshState() {
       rng = mulberry32(opts.seed);
-      const places = makePlaces(rng);
+      const places = demand ? demandPlaces.concat(hubPlaces) : makePlaces(rng);
+      if (demand) nameDemandPlaces(places);
       const byType = {};
       for (const p of places) (byType[p.type] = byType[p.type] || []).push(p);
       S = {
-        t: 0, minute: DAY_START, day: 0,
+        t: 0, minute: dayStart, day: 0, dayOfWeek: settings.day,
+        trips: [], walked: 0, unrouted: 0, completedPeople: 0, plan: null, carTrips: 0, shuttleTrips: 0,
         places, byType,
         depots: opts.depots.map((d) => snapSite(d, "depot")),
         base: snapSite(opts.base, "base"),
@@ -189,7 +283,12 @@
       stopNode.fill(0);
       for (const p of [...S.places, ...S.depots, S.base]) stopNode[p.node] = 1;
       for (const v of localExits) stopNode[v] = 1;   // visitors leave through these
-      setPopulation(settings.population);
+      if (demand) {
+        for (const p of hubPlaces) stopNode[p.node] = 1;
+        for (const l of parkingLots) { l.used = 0; stopNode[l.node] = 1; }
+        planDay();
+      }
+      else setPopulation(settings.population);
       for (const kind of FLEET_KINDS) setFleet(kind, settings[FLEET_KEY[kind]]);
     }
     const rareAfter = (mean) => S.t + mean * (0.5 + rng());
@@ -244,6 +343,7 @@
       rebuildAgenda();
     }
     function checkSchedules() {
+      if (demand) return releaseTrips();
       while (S.agendaPos < S.agenda.length && S.agenda[S.agendaPos].minute <= S.minute) {
         const s = S.agenda[S.agendaPos++];
         const req = { id: S.nextReq++, human: s.human.id, profile: s.human.profile, from: s.from, to: s.to,
@@ -252,6 +352,90 @@
         log("REQUEST", `r#${req.id} ${req.profile} #${req.human}: ${s.from.name} → ${s.to.name}`);
       }
     }
+    // ------------------------------------------------------------------ Census demand trips
+    function nameDemandPlaces(places) {
+      if (places.named) return;
+      const seen = new Map();
+      for (const [i, p] of places.entries()) {
+        p.id = i;
+        const base = p.hub ? `Edge hub · ${streetName(p.node)}` : `${TYPE_LABEL[p.type]} · ${streetName(p.node)}`;
+        const n = (seen.get(base) || 0) + 1;
+        seen.set(base, n);
+        p.name = n > 1 ? `${base} ${n}` : base;
+      }
+      places.named = true;
+    }
+    function planDay() {
+      const plan = demand.generate({ day: S.dayOfWeek, seed: opts.seed + S.day, sampling: scale, events: settings.events, dayStart });
+      S.plan = plan.summary;
+      S.trips = plan.trips;
+      S.agendaPos = 0;
+      while (S.agendaPos < S.trips.length && S.trips[S.agendaPos].minute < S.minute) S.agendaPos++;
+      log("DEMAND", `${plan.summary.day}: ${Math.round(plan.summary.personTrips).toLocaleString()} trips planned, ${plan.summary.simulatedAgentTrips.toLocaleString()} agents at 1:${scale}`);
+    }
+    function releaseTrips() {
+      while (S.agendaPos < S.trips.length && S.trips[S.agendaPos].minute <= S.minute) {
+        const tr = S.trips[S.agendaPos++];
+        if (tr.mode === "walk") { S.walked += tr.weight; continue; }
+        // Today's drivers keep their cars with probability carShare (per sampled person and
+        // trip leg: both legs of one tour are decided alike via the trip's tag).
+        const mode = tr.mode === "drive" && !keepsCar(tr) ? "shuttle" : tr.mode;
+        if (mode === "shuttle") {
+          const fromPortal = tr.from.sector != null ? pickPortal(sectorEntries, tr.from.sector) : null;
+          const toPortal = tr.to.sector != null ? pickPortal(sectorExits, tr.to.sector) : null;
+          const from = tr.from.zone != null ? zonePlaceOf(tr.from.zone) : fromPortal != null ? hubFor(fromPortal) : null;
+          const to = tr.to.zone != null ? zonePlaceOf(tr.to.zone) : toPortal != null ? hubFor(toPortal) : null;
+          if (!from || !to) { S.unrouted += tr.weight; continue; }
+          if (from.node === to.node) { S.walked += tr.weight; continue; }
+          const req = { id: S.nextReq++, human: -1, profile: tr.purpose, from, to, pickup: from.node, dropoff: to.node,
+            requestedAt: S.t, pickedUpAt: null, completedAt: null, weight: tr.weight };
+          S.queue.push(req);
+          S.shuttleTrips += tr.weight;
+          continue;
+        }
+        // By car: from a map-edge entry, a parking lot or the home curb, to a lot, the home curb
+        // or a map-edge exit. Residents keep their cars at home; everyone else parks in a lot.
+        const homeEnd = (end, isHome) => isHome && zonePlaceOf(end.zone).type === "residential";
+        const origin = tr.from.zone == null ? pickPortal(sectorEntries, tr.from.sector)
+          : homeEnd(tr.from, !tr.returning) ? zoneNode[tr.from.zone] : unpark(tr.from.zone);
+        const lot = tr.to.zone != null && !homeEnd(tr.to, tr.returning) ? parkAt(tr.to.zone) : null;
+        const dest = tr.to.zone == null ? pickPortal(sectorExits, tr.to.sector) : lot ? lot.node : zoneNode[tr.to.zone];
+        const r = origin != null && dest != null && origin !== dest ? routeAvoiding(origin, dest, MODE_GENERAL) : null;
+        if (!r || !r.arcs.length) { if (origin === dest) S.walked += tr.weight; else S.unrouted += tr.weight; continue; }
+        if (lot) lot.used += tr.weight;
+        S.carTrips += tr.weight;
+        const v = makeVehicle("private", origin, { state: "private_trip", purpose: tr.purpose, pcu: scale,
+          destination: tr.to.zone != null ? zonePlaceOf(tr.to.zone) : null });
+        motion.setRoute(v, r.arcs);
+        if (isPortal(origin)) S.atPortal.push(v);
+      }
+    }
+    const hubFor = (portal) => hubByPortal.get(portal) || null;   // the edge hub serving an entry or exit
+    // Whether a trip that is made by car today still is: a hash of the person's tour, so a
+    // commuter's morning and evening legs agree, compared against the current car share.
+    function keepsCar(tr) { return (tr.tag % 1000) / 1000 < settings.carShare; }
+    // A lot near a zone with free spaces, nearer and emptier ones more likely; null if all full.
+    function parkAt(z) {
+      const cands = zoneLots[z];
+      if (!cands || !cands.length) return null;
+      let tot = 0;
+      const w = cands.map(({ l, d }) => { const free = Math.max(0, l.capacity - l.used); const x = free * Math.exp(-d / 250); tot += x; return x; });
+      if (!(tot > 0)) return null;
+      let r = rng() * tot;
+      for (let i = 0; i < cands.length; i++) { r -= w[i]; if (r <= 0) return cands[i].l; }
+      return cands[cands.length - 1].l;
+    }
+    // Where a car leaving a zone was parked: a nearby lot holding cars, else the zone's curb.
+    function unpark(z) {
+      const cands = zoneLots[z] || [];
+      let tot = 0;
+      const w = cands.map(({ l, d }) => { const x = Math.max(0, l.used) * Math.exp(-d / 250); tot += x; return x; });
+      if (!(tot > 0)) return zoneNode[z];
+      let r = rng() * tot;
+      for (let i = 0; i < cands.length; i++) if ((r -= w[i]) <= 0) { cands[i].l.used = Math.max(0, cands[i].l.used - scale); return cands[i].l.node; }
+      return zoneNode[z];
+    }
+
     // A ride request between two places, as a scheduled trip would make (also for tests).
     function addRequest(from, to, profile = "manual") {
       if (from.node === to.node) return null;
@@ -265,8 +449,9 @@
       S.t += STEP;
       S.minute += STEP / 60;
       if (S.minute >= 24 * 60) {
-        S.minute = DAY_START + (S.minute - 24 * 60);
+        S.minute = dayStart + (S.minute - 24 * 60);
         S.day++;
+        if (demand) { S.dayOfWeek = (S.dayOfWeek + 1) % 7; planDay(); }
         S.agendaPos = 0;
         while (S.agendaPos < S.agenda.length && S.agenda[S.agendaPos].minute < S.minute) S.agendaPos++;
       }
@@ -281,6 +466,7 @@
       if (!Number.isFinite(r.pickedUpAt) || r.completedAt != null) return false;
       r.completedAt = S.t;
       S.completed++;
+      S.completedPeople += r.weight || 1;
       S.rideSeconds += S.t - r.pickedUpAt;
       S.recentTrips.push({ ride: S.t - r.pickedUpAt, wait: r.pickedUpAt - r.requestedAt });
       if (S.recentTrips.length > 1000) S.recentTrips.splice(0, S.recentTrips.length - 1000);
@@ -311,7 +497,7 @@
         mode: kind === "private" ? MODE_GENERAL : MODE_PSV,
         capacity: CAPACITY[kind], state: "idle", retiring: false,
         riders: [], pickupQueue: [], segments: [], active: null, boarding: null,
-        idleSince: S.t, sharingDetour: 0, odo: 0, speedFactor: 1, pcu: PCU[kind] || 1,
+        idleSince: S.t, sharingDetour: 0, odo: 0, speedFactor: 1, pcu: (PCU[kind] || 1) * scale,
         ...extra,
       };
       motion.place(v, node);
@@ -385,20 +571,24 @@
     let jamEpoch = -1;
     // Almost every trip ends at a stop: a place, a depot, the emergency base or a portal where
     // visitors leave (about 300 nodes). One backward route tree per stop, built on first use
-    // (about 1 ms and 43 KB each), answers every route into it from anywhere, so dispatch, ride
+    // (about 1 ms and 11 KB each), answers every route into it from anywhere, so dispatch, ride
     // sharing and private traffic rarely run a point-to-point search.
     const stopNode = new Uint8Array(graph.nodes.count);
     const trees = new Map();
+    const MAX_TREES = 1600;  // 11 KB each; least recently used trees are dropped
     function treeFor(node, mode) {
       const key = node * 4 + mode;
       let tree = trees.get(key);
-      if (!tree) { tree = router.treeTo(node, { mode }); trees.set(key, tree); }
+      if (tree) { trees.delete(key); trees.set(key, tree); return tree; }   // most recently used last
+      tree = router.treeTo(node, { mode });
+      trees.set(key, tree);
+      if (trees.size > MAX_TREES) trees.delete(trees.keys().next().value);
       return tree;
     }
     // Fastest-route length for ride-sharing comparisons; null if there is no legal route.
     function routeLength(a, b, mode) {
       if (bannedCount || !stopNode[b]) { const r = routeAvoiding(a, b, mode); return r ? r.length : null; }
-      const l = treeFor(b, mode).length[a];
+      const l = router.pathLength(treeFor(b, mode), a);
       return l < Infinity ? l : null;
     }
 
@@ -818,7 +1008,7 @@
       return false;
     }
     function arrivePrivate(v) {
-      if (v.state === "private_through" || v.state === "private_out") return removeVehicle(v);
+      if (v.state === "private_through" || v.state === "private_out" || v.state === "private_trip") return removeVehicle(v);
       // Visitors park off-street for a while, then leave the area.
       v.state = "private_parked";
       // Commuters leave between 16:15 and 18:45; other visitors after 5 to 60 minutes.
@@ -834,8 +1024,10 @@
     function tickPrivateTraffic() {
       const rate = settings.privateTraffic, peak = amPeak(S.minute);
       const agents = rate / opts.trafficScale * STEP / 3600;
-      S.localCredit = Math.min(4, S.localCredit + agents * opts.localPerHour * (1 + opts.amPeak * peak));
-      while (S.localCredit >= 1) { S.localCredit -= 1; spawnLocal(); }
+      if (!demand) {   // with Census demand, commuters and visitors come from the trip list
+        S.localCredit = Math.min(4, S.localCredit + agents * opts.localPerHour * (1 + opts.amPeak * peak));
+        while (S.localCredit >= 1) { S.localCredit -= 1; spawnLocal(); }
+      }
       S.throughCredit = Math.min(4, S.throughCredit + agents * opts.throughPerHour * (1 + opts.throughPeak * peak));
       while (S.throughCredit >= 1) { S.throughCredit -= 1; spawnThrough(); }
       while (S.parked.length && S.parked[0].departAt <= S.t) {
@@ -996,8 +1188,8 @@
     }
 
     // Drivers stuck in a queue for a minute, with real congestion still ahead, look for a faster
-    // way to where they are going: up to four per step (longest wait first), at most every two
-    // minutes each (five after finding nothing better). Freeway through-traffic
+    // way to where they are going: up to two per step (longest wait first), at most every two
+    // minutes each (ten after finding nothing better). Freeway through-traffic
     // and responders keep their routes.
     function rerouteQueued() {
       const cands = [];
@@ -1009,8 +1201,8 @@
       cands.sort((a, b) => b.queuedFor - a.queuedFor);
       let tries = 0;
       for (const v of cands) {
-        if (tries >= 4) break;
-        v.rerouteAfter = S.t + 300;   // look again in five minutes unless a better way turns up
+        if (tries >= 2) break;
+        v.rerouteAfter = S.t + 600;   // look again in ten minutes unless a better way turns up
         // Worth a search only if the rest of the route runs into real congestion.
         if (!congestion.pathDelayed(v.route.slice(v.ri + 1))) continue;
         tries++;
@@ -1133,7 +1325,11 @@
     freshState();
 
     return {
-      graph, router, signals, motion, congestion, core, settings,
+      graph, router, signals, motion, congestion, core, settings, demand, scale,
+      setDay(d) { settings.day = ((d % 7) + 7) % 7; },
+      setCarShare(x) { settings.carShare = Math.max(0, Math.min(1, x)); },
+      get parkingLots() { return parkingLots; },
+      setEvents(list) { settings.events = list; },
       chokepoints: (top) => congestion.chokepoints(S.vehicles, top),
       get state() { return S; },
       step, run, reset,

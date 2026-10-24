@@ -1,7 +1,7 @@
 // Capacity and congestion on the street graph (Phase 4). No dependencies.
 //
 // Each directed arc gets a capacity from its lanes and road-class saturation flow
-// (src/motion.js SAT_FLOW), scaled by the green share at signals. Every update measures the
+// (src/motion.js SAT_FLOW), scaled by the approach's green share at signals. Every update measures the
 // arc's inflow (smoothed over about five minutes) and the vehicles queued on it, and turns them
 // into an expected extra delay for routing:
 //   BPR term    free-flow time × 0.15 × (flow / capacity)^4, the classic volume/capacity curve
@@ -38,12 +38,12 @@
   function createCongestion(graph, router, motion, signals, opts = {}) {
     const arcs = router.arcs, A = arcs.length;
     const nflags = graph.nodes.flags;
-    const greenShare = signals.green / signals.cycle;
     const capacity = new Float64Array(A), clearPerGreen = new Float64Array(A), free = new Float64Array(A);
     for (let i = 0; i < A; i++) {
       const lanes = motion.laneCount[i], sat = 3600 / (motion.headway[i] || 3600 / 1800);
-      capacity[i] = lanes * sat * (motion.controlled[i] ? greenShare : 1);
-      clearPerGreen[i] = motion.controlled[i] ? lanes * signals.green / (3600 / sat) : 0;
+      const green = motion.controlled[i] ? signals.greenFor(arcs[i]) : 0;
+      capacity[i] = lanes * sat * (motion.controlled[i] ? green / signals.cycle : 1);
+      clearPerGreen[i] = motion.controlled[i] ? lanes * green / (3600 / sat) : 0;
       free[i] = arcs[i].baseTime;
     }
     const flow = new Float64Array(A), queue = new Float64Array(A), extra = new Float64Array(A);

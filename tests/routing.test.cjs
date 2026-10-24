@@ -139,11 +139,12 @@ function checkRoute(router, g, r, from, to, mode) {
       let greenTime = 0;
       for (let t = 0; t < sig.cycle; t += 0.25) {
         const w = sig.signalWait(arc, t);
-        assert.ok(w >= 0 && w <= sig.cycle - sig.green + 1e-9);
+        assert.ok(w >= 0 && w <= sig.cycle - sig.greenFor(arc) + 1e-9);
         if (w === 0) greenTime += 0.25;
         else assert.ok(sig.canEnter(arc, t + w), "arc must be green once its wait is over");
       }
-      assert.ok(Math.abs(greenTime - sig.green) <= 0.5, "each group is green 30 s per cycle");
+      assert.ok(Math.abs(greenTime - sig.greenFor(arc)) <= 0.5, "each group is green for its split of the cycle");
+      assert.ok(sig.greenFor(arc) >= 15 && sig.greenFor(arc) <= 45);
       // Cross streets at the same controller are never green together.
       for (const other of g.inc[arc.to])
         if ((other.signal === 0 || other.signal === 1) && other.signal !== arc.signal)
@@ -155,6 +156,10 @@ function checkRoute(router, g, r, from, to, mode) {
     if (arc.stop && arc.signal === -1) { stops++; assert.strictEqual(sig.controlDelay(arc, 0), T.STOP_HOLD); }
   }
   assert.ok(signalArcs > 0 && internal > 0 && stops > 0, "fixture should exercise signals, clusters and stops");
+  // Green splits follow approach capacity; both groups share the 60 s of green.
+  for (let c = 0; c < g.controllers.length; c++) assert.ok(Math.abs(sig.g0[c] + sig.g1[c] - 60) < 1e-9);
+  const even = T.createSignals(g, { split: false });
+  assert.ok([...even.g0].every((x) => x === 30), "split: false keeps the source's 30/30");
   console.log(`PASS: sample network — ${pairs} optimal routes in both modes, one-ways, contraflow, transit mall, bans, alternatives, cache, nearest node, connected core, signals.`);
 }
 

@@ -2,7 +2,7 @@
 
 > This document describes the **original grid app**, now kept unchanged at `source/index.html`.
 > The real-street port lives in `src/` (`graph.js`, `routing.js`, `traffic.js`, `motion.js`,
-> `sim.js`, `mapview.js`) and `index.html`; see PLAN.md Phase 3 for how each source mechanism
+> `congestion.js`, `demand.js`, `sim.js`, `mapview.js`) and `index.html`; see PLAN.md Phase 3 for how each source mechanism
 > maps onto it. This file is rewritten in Phase 9.
 
 ## Original behavior

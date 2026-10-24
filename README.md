@@ -10,7 +10,8 @@ unchanged at [`source/index.html`](source/index.html); its documentation is in
 
 See **[PLAN.md](PLAN.md)** for the phased build plan and current progress.
 
-Street data © OpenStreetMap contributors (ODbL).
+Street and parking data © OpenStreetMap contributors (ODbL). Census data: U.S. Census Bureau
+(2020 Census, LEHD LODES), public domain.
 
 ## Build the street network
 
@@ -25,6 +26,20 @@ This writes `data/mpls_graph.js` (loaded by the page) and `data/mpls_graph.repor
 it), and saves the raw download to `data/raw/` (gitignored). Rebuild from a saved download with
 `--input data/raw/osm_roads.json`. Format: [`docs/DATA_FORMAT.md`](docs/DATA_FORMAT.md).
 
+## Build the demand
+
+Homes, jobs and commutes come from the Census Bureau (2020 Census blocks through TIGERweb, LEHD
+LODES jobs and home-to-work flows) and parking from OpenStreetMap, also through a one-time
+offline build:
+
+```
+python3 tools/build_demand.py --fetch
+```
+
+This writes `data/mpls_demand.js` and `data/mpls_demand.report.json` (totals and checks);
+rebuild from the saved downloads with `python3 tools/build_demand.py`. Census data is public
+domain.
+
 ## Street map viewer
 
 `viewer.html` draws the street network: it opens with the whole area in view; drag to pan,
@@ -35,8 +50,8 @@ network from `data/sample_graph.js`.
 ## Simulation
 
 `index.html` runs the shuttle simulation on the real streets: sedans, shuttles and buses
-dispatched from five parking-ramp depots to riders' scheduled trips (placeholder homes, jobs,
-schools, groceries and hubs until the census/jobs demand model), with pooling and on-the-way
+dispatched from five parking-ramp depots to a day of trips built from the Census (commuters,
+UMN students, errands, visitors and events, for any day of the week), with pooling and on-the-way
 ride sharing, private traffic and freeway through-traffic entering at the map edge, signals that
 discharge at lane capacity, congestion that routes and drivers avoid, police/fire closures and
 breakdowns. The Chokepoints panel tracks the river bridges, freeway ramps and map-edge entries. Drag, scroll or pinch the map; tap a vehicle to
@@ -59,12 +74,13 @@ contraflow lanes).
 ## Tests
 
 ```
-python3 -m unittest discover -s tests -p "test_*.py"   # street pipeline
+python3 -m unittest discover -s tests -p "test_*.py"   # street and demand pipelines
 node tests/viewer.test.cjs                             # decoder and street viewer
 node tests/routing.test.cjs                            # router, signals, 7,000-node benchmark
 node tests/motion.test.cjs                             # vehicle motion, up to 3,400 vehicles
 node tests/sim.test.cjs                                # engine on the real network
 node tests/congestion.test.cjs                         # capacity, congestion, AM peak
+node tests/demand.test.cjs                             # Census demand, daily totals, AM/PM shape
 node tests/page.test.cjs                               # simulation page, headless
 node tests/simulation.cjs                              # original grid app (slow, ~2 minutes)
 ```

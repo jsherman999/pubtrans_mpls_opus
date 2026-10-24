@@ -219,17 +219,61 @@ Split into four steps so each lands green on its own.
   desktop Chrome, roughly double Phase 3d. When a frame overruns, playback slows rather than
   skipping steps.
 
-### Phase 5 — Demand model (`tools/build_demand.py` → `data/mpls_demand.js`)
-- Zones: census blocks (or block groups) clipped to the box, each snapped to nearby street nodes.
-- Residents by block (decennial census / ACS), jobs by block (LEHD LODES WAC), UMN class-change
-  pulses on both banks, hospital shifts (Hennepin Healthcare), retail/errand trips.
-- Inbound commuters enter at portals weighted by approach volumes (I-94, I-35W, I-394, Hwy 55,
-  Hiawatha, University/Washington/Hennepin/Central, etc.).
-- Time-of-day profiles with hybrid-work day-of-week factor; event surges (U.S. Bank Stadium,
-  Target Field, Target Center, Huntington Bank Stadium).
-- Agent sampling ratio 1:N (default 1:20) with every reported metric scaled back to full size.
-- Exit: daily totals within ±10 % of targets (~45k downtown residents, ~200k jobs at ~75 % daily
-  presence, UMN population) and a sensible AM/PM shape.
+### Phase 5 — Demand model (`tools/build_demand.py` → `data/mpls_demand.js`, `src/demand.js`) ✅
+- Inputs (public, fetched by `python3 tools/build_demand.py --fetch`): 2020 Census blocks
+  (TIGERweb: population, housing units, internal points; the Census API now needs a key, the
+  TIGERweb layer does not), 2020 tracts (home locations of commuters), LEHD LODES 2023 for
+  Minnesota (WAC jobs by sector, OD main + aux home→work flows), OpenStreetMap parking (877 ramps
+  and lots, 172k spaces, mostly estimated from footprints). Raw downloads in `data/raw/demand/`.
+- Zones: the 822 inhabited or working census blocks in the box, snapped at run time to the
+  nearest curbside node in the connected core (~720 places).
+- Generators (`src/demand.js`), all at full scale then sampled:
+  - **Commuters** from LODES OD: inside the box (10,296 block pairs), inbound by home direction
+    (16 sectors; enter at map-edge roads in that direction weighted by their capacity), outbound;
+    start times by job sector; health-care jobs at HCMC and the M Health Fairview campuses keep
+    7/15/23 h shifts; daily presence by sector and weekday (hybrid office work: 80 % Tue–Wed,
+    52 % Fri, ~8 % weekends; other work ~90 %).
+  - **UMN**: 38,000 students on the Minneapolis campus on a weekday (assumption), 45 % living in
+    the box near campus, the rest arriving from outside; 6 % cross between banks every hour
+    09:00–16:00. Staff come from LODES (education jobs on campus).
+  - **Errands** by residents (0.4 tours/day, local: distance decay 1.2 km) and **visitors** from
+    outside (1.2 per retail or food-service job), toward shops and restaurants.
+  - **Events**: arrivals in the 90 minutes before the start, a surge at the end; the page offers
+    Twins, Vikings, Timberwolves and Gophers games (Twins 19:10 on the default Wednesday).
+  - Modes: trips under 800 m inside the box are walked (counted, not simulated); the rest are
+    today's car or transit trips (car shares by purpose, e.g. 55 % of inbound commuters).
+    Transit riders take SDEV shuttles; **Car trips kept** (default 50 %, Phase 6 lever brought
+    forward) keeps that share of today's car trips as cars and moves the rest to shuttles.
+    Riders from outside board at an **edge hub**, the curb nearest their map-edge road.
+- In the engine: a Census day starts at 05:30; drivers into a zone park at a ramp or lot within
+  600 m (the driver walks the rest) and leave from one; residents keep cars at home. **Sampling
+  1:20** by default (1:10 selectable): every rider, shuttle and car agent stands for 20, and
+  every count shown is scaled back. Road effects: agents take 20 × the stop-line headway but at
+  most 4 cars of lane space (an agent 160 m long locked the downtown grid by length alone;
+  large models scale storage less than flow for small samples, as MATSim does).
+- Made necessary by real demand: **signal green splits** by approach capacity (arterials get up
+  to 45 of 60 s); **gridlock relief** (SUMO-style: a car unable to move for 5 minutes because
+  the road beyond is full jumps ahead along its route; counted); compact route trees (11 KB) in
+  a 1,600-tree cache.
+- Tests: `python3 -m unittest` (`tests/test_build_demand.py`: zones inside the box, job groups,
+  internal/inbound/outbound flows, directions incl. out-of-state, downtown subset, parking
+  estimates, output round trip) and `node tests/demand.test.cjs` (totals against the data and
+  targets, sampling, AM/PM shape, day of week, events, and a Census-demand morning in the
+  engine); the page test now also boots the page with Census demand.
+- **Exit check** (`tests/demand.test.cjs`):
+  | Target (plan) | Model | |
+  |---|---|---|
+  | ~200k jobs | 226,448 LODES 2023 jobs in the box (155,556 in downtown) | +13 % (within the test's 15 %) |
+  | ~75 % daily presence | 79 % on an average weekday; 193,317 jobs present on Wednesday | within 10 % |
+  | UMN population | 61,275 on the Minneapolis campus on Wednesday (38,000 students, assumed, + 23,275 staff present) | input assumption |
+  | ~45k downtown residents | **35,696** (2020 Census, downtown outline); 114,464 in the whole box | **−21 %: missed.** The 45k came from post-2020 estimates of a wider downtown; the model keeps the Census count |
+  | AM/PM shape | Wednesday: 720,800 person trips; peaks 08:00–09:00 (92,100, 5× the 11:00 hour) and 16:00–17:00 (86,200, 3.6× noon); inbound commuters 06:30–09:30 in, 15:00–19:00 out; Friday −21 % commutes, Sunday errands +30 % | ✓ |
+  | Sampled totals | 1:10 and 1:20 agents × weight within 10 % per purpose, 2 % overall | ✓ |
+- Result in the engine (seed 2, Wednesday, 05:30–09:00, 1:20): 76,000 riders delivered, 25 %
+  of motorised trips by car, up to 7,700 cars on the road, 43 gridlock jumps in 9,900 agent
+  trips, nothing unrouted. The default fleet (60 sedans, 260 shuttles, 60 buses agents =
+  7,600 vehicles) is fully busy by 08:00 and waits grow to 15+ minutes: sizing it is Phase 6.
+  Desktop Chrome at 08:15: about 22 ms of simulation per 20× frame (33 ms with drawing).
 
 ### Phase 6 — SDEV scenario and fleet at scale
 - Controls: share of remaining private vehicles, transit replaced (on/off), pooling level,
@@ -268,7 +312,7 @@ Split into four steps so each lands green on its own.
 
 1. Keep light rail (Green/Blue Line) as an optional mode on real alignments, or drop rail entirely
    for the "all transit replaced" scenario? (Plan assumes optional, off by default.)
-2. Default agent sampling ratio (1:20 assumed).
+2. Default agent sampling ratio (1:20 assumed). **Decided in Phase 5:** 1:20 default, 1:10 selectable.
 3. Whether remaining private vehicles may use bus-only lanes (assumed no).
 4. Depot locations (assumed: a handful of existing parking ramps, configurable).
 
@@ -284,4 +328,5 @@ Split into four steps so each lands green on its own.
 | 3c | done | `src/motion.js`: lanes, 8 m following across links, signals, stop signs, closures; connected core. 400 vehicles 0.08 ms/step. |
 | 3d | done | `index.html` runs the ported engine (`src/sim.js`) on real streets; source app kept at `source/index.html`; map layer shared as `src/mapview.js`. Peak 476 vehicles on the road; 20× frame ≈ 12 ms sim in desktop Chrome. Phone timing still to measure on a device. |
 | 4 | done | Saturation flow, merge turns, keep-clear, pcu-4 private agents with real-scale demand, BPR + queue delay routing and en-route diversion, chokepoint panel and congestion layer. AM peak: 121-car queue at the I-35W UMN exits at 08:05, cleared by 10:00. ≈ 22 ms per 20× frame in desktop Chrome at the peak. |
-| 5–9 | not started | |
+| 5 | done | Census 2020 blocks + LODES 2023 + OSM parking → 822 zones, 114k residents, 226k jobs; commuters, UMN, hospitals, errands, visitors, events by day of week; 721k trips on a Wednesday with 08–09 and 16–17 peaks; 1:20 agents; car-share lever, edge hubs, parking, green splits, gridlock relief. Downtown-residents target missed (35.7k Census vs 45k plan). |
+| 6–9 | not started | |

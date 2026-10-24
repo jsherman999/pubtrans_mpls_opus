@@ -39,8 +39,11 @@ function element(id) {
 const html = read("index.html");
 const inline = html.split("<script>")[1].split("</script>")[0];
 const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
-assert.deepStrictEqual(scripts, ["data/mpls_graph.js", "src/graph.js", "src/routing.js", "src/traffic.js",
-  "src/motion.js", "src/congestion.js", "src/sim.js", "src/mapview.js"], "page loads the data and engine modules in order");
+assert.deepStrictEqual(scripts, ["data/mpls_graph.js", "data/mpls_demand.js", "src/graph.js", "src/routing.js", "src/traffic.js",
+  "src/motion.js", "src/congestion.js", "src/demand.js", "src/sim.js", "src/mapview.js"], "page loads the data and engine modules in order");
+
+// Boot the page headless. Without data/mpls_demand.js it runs the placeholder demand.
+function boot({ withDemand }) {
 
 const calls = { fill: 0, stroke: 0, arc: 0, fillText: 0 };
 const ctx = new Proxy({}, {
@@ -56,7 +59,7 @@ const els = {};
 const getEl = (id) => (els[id] = els[id] || element(id));
 const canvas = getEl("map");
 Object.assign(canvas, { clientWidth: 390, clientHeight: 780, width: 300, height: 150, getContext: () => ctx });
-for (const id of ["chartWait", "chartQueued"]) Object.assign(getEl(id), { clientWidth: 300, clientHeight: 56, getContext: () => ctx });
+for (const id of ["chartWait", "chartQueued", "chartPlan"]) Object.assign(getEl(id), { clientWidth: 300, clientHeight: 56, getContext: () => ctx });
 const steppers = [];
 for (const [step, by] of [["population", -250], ["population", 250], ["sedan", -5], ["sedan", 5], ["shuttle", -5], ["shuttle", 5], ["bus", -2], ["bus", 2]]) {
   const b = element(""); b.dataset = { step, by: String(by) }; steppers.push(b);
@@ -72,6 +75,8 @@ const sandbox = {
   matchMedia: (q) => ({ matches: q.includes("max-width: 760px"), addEventListener() {} }),   // phone layout
   devicePixelRatio: 3,
   addEventListener() {},
+  location: { search: "", href: "index.html" },
+  URLSearchParams,
   document: {
     documentElement: { style: { setProperty() {} } },
     title: "",
@@ -82,14 +87,20 @@ const sandbox = {
 };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
-for (const s of scripts) vm.runInContext(read(s), sandbox, { filename: s });
+for (const s of scripts) if (withDemand || s !== "data/mpls_demand.js") vm.runInContext(read(s), sandbox, { filename: s });
 vm.runInContext(inline, sandbox, { filename: "index.html" });
 assert.deepStrictEqual(errors, []);
 const page = sandbox.mplsSim;
 assert.ok(page, "page started");
+const frame = () => { now += 100; const t = timers.splice(0); t.forEach((fn) => fn()); while (rafs.length) rafs.shift()(); };
+return { page, els, steppers, frame, errors, calls, sandbox };
+}
+
+// ============================================================ placeholder demand (no Census file)
+{
+const { page, els, steppers, frame, errors, calls } = boot({ withDemand: false });
 const { sim, map } = page;
 const { view, graph } = map;
-const frame = () => { now += 100; const t = timers.splice(0); t.forEach((fn) => fn()); while (rafs.length) rafs.shift()(); };
 
 // The whole study area fits a phone screen at load, clear of the title card and the sheet.
 assert.ok(view.ox >= 0 && view.ox + graph.width * view.scale <= 390 + 1e-6);
@@ -187,7 +198,7 @@ assert.ok(sim.state.t > held);
 const sedans = sim.countFleet("sedan");
 steppers[3].fire("click");
 assert.strictEqual(sim.countFleet("sedan"), sedans + 5);
-assert.strictEqual(els.sSedan.textContent, sedans + 5);
+assert.strictEqual(els.sSedan.textContent, String(sedans + 5));
 steppers[6].fire("click");
 assert.strictEqual(sim.countFleet("bus"), 8);
 steppers[1].fire("click");
@@ -212,3 +223,58 @@ frame();
 assert.deepStrictEqual(errors, []);
 console.log(`PASS: page fits a phone at load, 20× frames advance a minute each and draw ${onRoad} vehicles, ` +
   "tap selects and follows a shuttle and shows a place, pause/speed/fleet/population/sharing/traffic/emergency/reset controls work.");
+}
+
+// ============================================================ Census demand (the page as shipped)
+{
+const { page, els, steppers, frame, errors, calls, sandbox } = boot({ withDemand: true });
+const { sim, map } = page;
+const K = sim.scale;
+assert.ok(sim.demand && K === 20, `Census demand at 1:20 (demand ${!!sim.demand}, K ${K})`);
+assert.strictEqual(els.demandBox.hidden, false);
+assert.strictEqual(els.popStepper.hidden, true, "population comes from the Census, not a stepper");
+assert.strictEqual(els.clock.textContent, "05:30");
+assert.strictEqual(els.day.children.length, 7);
+assert.strictEqual(els.day.value, "2", "Wednesday");
+assert.strictEqual(els.event.value, "1", "Twins game tonight");
+assert.match(els.dPeople.textContent, /^114,464 · 19\d,\d{3}$/);
+assert.match(els.dTrips.textContent, /^\d+k · \d+k · \d+k$/);
+els.speed.fire("input", { target: { value: "20" } });
+for (let i = 0; i < 150; i++) frame();          // 05:30 to 08:00
+page.refresh();
+assert.strictEqual(els.clock.textContent, "08:00");
+assert.deepStrictEqual(errors, []);
+assert.strictEqual(sim.audit().length, 0);
+// Counts on the panel are real people and vehicles.
+assert.strictEqual(els.hDone.textContent, (sim.state.completed * K).toLocaleString());
+assert.strictEqual(els.sShuttle.textContent, (sim.countFleet("shuttle") * K).toLocaleString());
+const road = Number(els.hRoad.textContent.replace(/,/g, ""));
+assert.ok(road > 5000, `rush-hour vehicles on the road (${road})`);
+assert.match(els.status.textContent, /vehicles on the road · [\d,]+ waiting · [\d,]+ rides done/);
+// Car share lever: fewer cars kept means more shuttle trips planned.
+const before = els.dTrips.textContent;
+els.carShare.fire("input", { target: { value: "10" } });
+assert.strictEqual(sim.settings.carShare, 0.1);
+assert.notStrictEqual(els.dTrips.textContent, before);
+assert.match(els.carShareHint.textContent, /^10 % of the trips made by car today are still driven/);
+// Plan chart hover readout.
+els.chartPlan.fire("pointermove", { offsetX: 8.5 * (300 / 24) });
+assert.match(els.planTip.textContent, /^08:00–09:00 · [\d,]+ by shuttle · [\d,]+ by car · [\d,]+ on foot$/);
+// Day and event restart the day; sampling reloads the page with ?sampling.
+els.day.fire("change", { target: { value: "6" } });
+assert.ok(sim.state.dayOfWeek === 6 && sim.state.t === 0 && els.clock.textContent === "05:30");
+els.event.fire("change", { target: { value: "2" } });
+assert.strictEqual(sim.settings.events[0].venue, "U.S. Bank Stadium");
+const sunday = sim.state.plan;
+assert.ok(sunday.day === "Sunday" && sunday.byPurpose.event > 120000, "Vikings game on Sunday");
+els.sampling.fire("change", { target: { value: "10" } });
+assert.match(sandbox.location.search, /^sampling=10$/, "sampling change reloads with ?sampling=10");
+// The vehicle panel says how many real vehicles an agent stands for.
+for (let i = 0; i < 60; i++) frame();
+const v = sim.state.vehicles.find((x) => x.kind === "shuttle" && x.lane >= 0);
+page.select(v);
+assert.ok(els.infoList.children.some((c) => c.textContent === "20 vehicles travelling together (1 : 20 sample)"));
+assert.deepStrictEqual(errors, []);
+console.log(`PASS: Census demand on the page: 05:30 start, Wednesday with a Twins game, ${road.toLocaleString()} vehicles on the road at 08:00 in real numbers, ` +
+  "car-share lever, plan chart readout, day/event/sampling controls, agent scale in the details panel.");
+}
