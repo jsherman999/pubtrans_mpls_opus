@@ -157,7 +157,8 @@
     #mapButtons { right: calc(12px + env(safe-area-inset-right, 0px)); top: auto; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
     #info { bottom: calc(120px + env(safe-area-inset-bottom, 0px)); }
     #pov { top: calc(104px + env(safe-area-inset-top, 0px)); bottom: auto; right: 12px; width: calc(100vw - 24px); }
-    #credit { bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+    #credit { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 170px); line-height: 1.3; }
+    #panel.open ~ #credit { display: none; }   /* the Key section carries the credit while the sheet is open */
     #title { max-width: calc(100vw - 24px); }
   }
   @media (prefers-reduced-motion: reduce) { #panel { transition: none; } }
@@ -293,6 +294,8 @@
     <span><span class="sw" style="background:var(--amber)"></span>Slow (adds under 1 min)</span>
     <span><span class="sw" style="background:var(--jam)"></span>Jammed (adds 1 min or more)</span>
   </div>
+  <p class="hint">Street, building and parking data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
+    contributors (ODbL). Homes, jobs and commutes: U.S. Census Bureau, 2020 Census and LEHD LODES (public domain).</p>
   <p class="hint">Zoom in for signals (green/red per approach), stop signs, one-way arrows and roads that continue off the map.
     <a href="viewer.html">Street viewer</a> · <a href="source/index.html">Original grid app</a></p>
 </aside>

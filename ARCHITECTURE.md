@@ -1,83 +1,130 @@
-# Architecture and source adaptation
+# Architecture
 
-> This document describes the **original grid app**, now kept unchanged at `source/index.html`.
-> The real-street port lives in `src/` (`graph.js`, `routing.js`, `traffic.js`, `motion.js`,
-> `congestion.js`, `demand.js`, `sim.js`, `mapview.js`) and `index.html`; see PLAN.md Phase 3 for how each source mechanism
-> maps onto it. This file is rewritten in Phase 9.
+PubTrans MPLS simulates self-driving electric (SDEV) shuttles, sedans and buses serving downtown
+Minneapolis and the University of Minnesota on the real street network, with private traffic,
+signals, congestion and a day of trips built from the Census. Everything runs in the browser
+(plain HTML, vanilla JavaScript, Canvas; no build step, no server, no map tiles) and the same
+engine runs headless in Node for tests and scenario sweeps.
 
-## Original behavior
+The original grid app this was ported from is kept at `source/index.html`; its design is in
+[`docs/SOURCE_ARCHITECTURE.md`](docs/SOURCE_ARCHITECTURE.md). [`PLAN.md`](PLAN.md) records how
+each phase was built, measured and checked.
 
-The source is a single HTML document: CSS and controls, graph/building data, schedule-driven population, dispatch, vehicle state machines, interactive planning, top-down rendering, perspective rendering, metrics, and startup.
+## Layout
 
-- `BUILDINGS`, `buildingsByType`, `nodeXY`, `adj`, and `edges` connect semantic destinations to pickup nodes.
-- `makeHuman` creates randomized worker/student/errand/commuter schedules; `checkSchedules` and `fireEvent` enqueue requests.
-- `dispatch` groups requests into same-origin sedan carpools, same-destination shuttle pools, overloaded-origin sweeps, then singles. Multi-stop routes keep ordered pickup/dropoff segments and reserve road edges.
-- `dijkstra` respects directed streets and weights congestion; `kShortest` bans selected edges to find route alternatives. Some tree-like suburban routes necessarily share their only exit.
-- `stepCars` handles travel, one-rider-per-tick boarding, traffic waits, obstacles and trip completion. Idle cars return to Central Station. Live fleet removal requeues affected requests.
-- Auto mode runs schedule demand and random obstacles. Interactive mode pauses the background fleet and follows a selected trip with scripted obstacles and optional narration.
-- Top-down maps render buildings, roads, traffic, congestion, waiting counts, routes, obstacles and cars. Driver POV projects the same world geometry into an offscreen Canvas and copies it to the cockpit.
-- The 100 ms tick advances simulation time, updates demand/dispatch/vehicles, refreshes UI, records metrics and renders. Debug logs cap at 500 entries; trip history and graph samples are bounded.
+```
+index.html            simulation page            viewer.html         street map + route preview
+source/index.html     original grid app (unchanged)
+src/                  browser + Node modules, no dependencies, loaded with <script src>
+  graph.js            decode data/mpls_graph.js; link geometry; link picking index
+  routing.js          arcs in CSR arrays; A*/Dijkstra; backward route trees; connected core
+  traffic.js          signal controllers: cycle, green splits, waits; stop-sign holds
+  motion.js           vehicles in lanes: following, saturation flow, merges, closures, gridlock relief
+  congestion.js       capacities, measured flow and queues, BPR + queue delay; chokepoints
+  demand.js           a day of person trips from data/mpls_demand.js, sampled into agents
+  sim.js              the engine: demand release, dispatch, pooling, ride sharing, fleet, private
+                      traffic, emergencies, EV charging, rebalancing, metrics hooks
+  metrics.js          VMT/VHT, deadhead, occupancy, utilisation, distributions, series, CSV
+  mapview.js          zoomable canvas map shared by both pages
+  buildings.js        footprint decoding, spatial index, landmark designs
+  pov.js              driver's-seat perspective view
+tools/                offline builds (Python, standard library) and Node runners
+  build_osm.py        OpenStreetMap streets      -> data/mpls_graph.js
+  build_demand.py     Census blocks, LODES, OSM parking -> data/mpls_demand.js
+  build_buildings.py  OpenStreetMap buildings    -> data/mpls_buildings.js
+  run_scenario.cjs    headless runs and sweeps   -> CSV + SVG
+  fleet_sweep.cjs     fleet-size sweep           -> data/fleet_sweep*.json
+data/                 generated, committed data (raw downloads in data/raw/, ignored)
+tests/                Node and Python tests (see README)
+docs/                 data formats, recorded results, source-app docs
+```
 
-## Adaptation
+## Data
 
-The original center indexing remains, now 7 intersections per side. Additional nodes use explicit coordinates in `extraNodes`. All roads, including curve samples, enter the same graph. Residential buildings have explicit centers, small footprints and nearby road access nodes, so drawing, picking, waiting badges, destinations and POV all agree.
+Three offline builds turn public data into compact `window.X = {...}` scripts the pages load
+with `<script src>`, so they work from `file://` and GitHub Pages. Formats are in
+[`docs/DATA_FORMAT.md`](docs/DATA_FORMAT.md).
 
-Four outward sectors retain randomized offsets and gaps. A fifth development fans outward from a fixed entrance connected to the southeast city corner, 60 m away. Each cul-de-sac has a second residence sharing its access node. Quadratic curves are sampled into traversable segments; dead ends have turning circles. Distance-weighted routing and distance-based vehicle progress prevent short curve segments from artificially slowing cars. One-way streets remain inside the grid, avoiding disconnected suburban access roads.
+- **Streets** (`data/mpls_graph.js`, 541 KB): OSM drivable ways in the box S 44.960, W −93.292,
+  N 44.997, E −93.215, simplified to 5,327 topological nodes and 6,614 links (11,007 directed
+  arcs) with geometry, speeds, lanes, one-ways, shuttle-only streets, bridges, signal controllers
+  and stop approaches. Roads leaving the box end at 205 portals.
+- **Demand** (`data/mpls_demand.js`, 223 KB): 822 census blocks with residents (2020 Census) and
+  jobs by sector (LEHD LODES 2023); home-to-work flows inside the box and by direction to and
+  from it; UMN campus, hospitals and venues; 877 parking facilities.
+- **Buildings** (`data/mpls_buildings.js`, 573 KB, loaded after the page starts): 10,680
+  footprints with heights.
 
-Seven independent view transforms share the same live state. Pointer coordinates are inverted through the selected view before picking a car or building. Only onscreen maps render each tick to limit phone workload. The sidebar cockpit remains based on world coordinates. Native document scrolling and sticky shortcuts replace the original viewport-locked layout.
+## The engine
 
-Canvas backing buffers follow CSS display dimensions multiplied by device pixel ratio, while map coordinates (780 × 780) and POV projection coordinates (640 × 640) stay fixed. Each visible frame checks sizing, so window resizing, browser zoom and monitor density changes redraw at native resolution. The POV buffer matches the cockpit pixel-for-pixel; metrics use the same sizing helper. Unchanged buffers are reused.
+`MplsSim.createSim(graph, options)` returns a seeded, DOM-free simulation. Time advances in
+fixed 3-second steps; playback speed only changes how many steps run per 100 ms frame, so
+results never depend on speed. One step:
 
-Rail has a dedicated polyline and train state machine, separate from road vehicles. `setupRail` builds the 75° external approach, city alignment and a visibility-graph detour around Juniper homes. Road/rail intersections become crossing gates. `tickTrains` advances three-coach trains, handles platform dwell and passenger transfers, and updates `railBlockedEdges` from the complete train footprint plus advance warning. Road routing/movement and the gridlock breakdown respect these gates. Scheduled events launch trains; road requests are injected at actual alighting. Outbound road completions enter platform waiting lists. Reset clears trains, platform queues and crossings.
+1. Advance the clock; release the trips due (or, without Census data, the placeholder
+   schedules).
+2. Private traffic: commuters, visitors and residents' cars from the trip list (cars are
+   sampled more coarsely than riders), plus freeway through-traffic portal to portal.
+3. Emergencies (police and fire close the direction they arrive from), breakdowns and recovery.
+4. Boarding (one rider agent per step), ride sharing (waiting riders ask nearby moving vehicles;
+   vehicles scan the queue), dispatch (sweeps, carpools and pools by area, then singles, each
+   from the nearest free vehicle through a 400 m grid), idle returns and charging trips.
+5. Rebalancing every 5 minutes toward a forecast of the next half hour.
+6. Movement (`motion.step`), arrivals, energy, metrics; congestion measures every minute.
 
-## Residential rendering and transfers
+**Routing.** Costs are seconds at posted speeds plus expected signal and stop delays. Trips into
+the ~1,300 stops (zones, depots, edge hubs, parking lots, exits) follow cached backward route
+trees (one Dijkstra per destination, 11 KB each, LRU); everything else uses A*. A route avoids
+closures and congestion only when its free-flow version would meet them (extra costs are never
+negative, so the free-flow route is otherwise still best). Drivers stuck in queues may reroute.
 
-`drawRanchFPV` replaces suburban residential block extrusions with low walls, doors, windows, a stoop and gable/hip roof polygons. Styles are derived deterministically from the building name; house fronts face their road access node.
+**Motion.** A vehicle is at `(arc, s, lane)`. Each lane is a front-first queue with an 8 m gap
+per car; stop lines discharge one car per saturation headway (lanes × class flow × the signal's
+green split); the first car away from a red loses 2 s; merges serve the lane that has waited
+longest; vehicles never stop inside short intersection arcs unless there is room beyond; after
+5 minutes truly stuck a vehicle jumps ahead along its route (counted).
 
-## Downtown building designs
+**Sampling.** A rider agent stands for `sampling` people (10 on the page, 5 in sweeps) and a fleet
+agent for that many vehicles; a car agent stands for 20 cars. Agents take `pcu` × the stop-line
+headway but at most 4 cars of lane space. Every number shown or exported is scaled back to real
+people and vehicles.
 
-`BUILDING_DESIGNS` describes each downtown building as a few convex parts (boxes, extruded gable/vault/sawtooth profiles, frustums, pyramids, octagonal prisms, trees) in block-local coordinates, written facing south and turned by quarter turns. `makeBuildingDesign` builds them once at startup into `buildingDesigns`, a Map outside the building objects, so request/vehicle state serialization is unchanged. Styling uses a name-seeded generator and never consumes `Math.random`, preserving seeded simulation runs. Parts stay inside the ±44 POV road inset and clear the rail corridor. Juniper Park & Ride is written along its track (x along the rail, +y to its right) and built by `setupBuildingDesignsAlongRail` after `setupRail`; its design keeps the rail heading as an angle, and drawing, culling, signs and map plans rotate local points at render time while ordering stays axis-aligned in the local frame.
+**Demand.** `src/demand.js` builds a full-scale day (commuters with sector start times, hybrid
+presence by weekday and hospital shifts; UMN students and class changes; errands; visitors;
+events), then samples agents with stochastic rounding. Trips from outside enter in the compass
+sector of home: drivers at a map-edge road in that direction, shuttle riders at its edge hub.
+Short trips are walked. Two scenario levers apply at release: the share of today's car trips
+still driven, and whether today's transit riders use SDEV shuttles.
 
-Train coaches are design parts too (`coachPart`). `drawBuildingsFPV` lets each trackside design (Central Stn, Park & Ride) claim coaches inside its footprint and order them with its own parts; every other coach sorts among buildings by distance. The live graph samples `currentQueueWaitMinutes` and the queue length.
+## The pages
 
-Faces carry flat decorations (window grids with lit panes, doors, balconies, awnings, cornices, bay windows, clocks) drawn right after their face, plus signs whose text is affine-mapped onto the projected sign corners. `drawDesignFPV` culls buildings behind or beside the view, back-face culls faces and batches each decoration layer into one path fill. Fine detail and signs are skipped beyond `FPV_DETAIL_DIST`. Standing parts never overlap on all three axes, so `orderDesignParts` always finds a separating plane: it paints ground surfaces first, then repeatedly takes the farthest part with nothing behind it (`partBehind`). `drawDesignPlan` draws the same parts as a top-down roof plan clipped to the building square. Residential `units` weight home assignment; the population default of 450 keeps the earlier residents-per-home ratio.
+`index.html` builds the engine, the shared map view and the panels. The map draws streets by
+class (one path per class and width), footprints from 0.5 px/m, congestion offset beside each
+street, signals per approach, places and waiting counts, and vehicles (dots far out, scaled
+shapes up close, sampled cars as several cars nose to tail). Picking inverts the view transform.
+**Ride along** opens the driver's-seat view (`src/pov.js`): roads, extruded buildings with
+back-face and distance culling, the skyline out to 1.5 km, landmark designs and nearby
+vehicles, drawn far to near and interpolated between steps. The panel (a bottom sheet on
+phones) holds playback, scenario and fleet controls, live state, run metrics with CSV export,
+chokepoints, the event log and the key.
 
-## Followed bus
+`viewer.html` is the street map on its own, with street inspection and a car-vs-shuttle route
+preview.
 
-`updateCockpitFocal` shows a tapped car or interactive trip when there is one; otherwise it shows `followedBus`. `pickFollowedBus` chooses the Juniper Commons bus, whose neighborhood adjoins the center, and falls back to any other bus only when the followed one leaves `cars`. Reset day keeps the same bus.
+## Performance (desktop, Apple silicon)
 
-`animateTransfer` is called at actual boarding and dropoff transitions, once per request. It snapshots the building center and vehicle stop position. Alighting effects interpolate for 650 ms of wall-clock time, with a 65 ms stagger for groups. Boarding effects use a playback-scaled duration and are explicitly ended when the nine-simulated-second departure pause expires, and renders as a stick figure in the maps and POV. Completed effects are pruned every tick, including while paused. Reset clears all effects. The animations never modify simulation state or count as traffic obstacles.
+| | |
+|---|---|
+| A* route on the real network | 0.12 ms |
+| Census AM peak, 1:10, 8,000-vehicle fleet | ~20 ms per 10 steps in Node, ~40 ms per 10× frame in Chrome with drawing |
+| Driver view downtown | ~0.5 ms of drawing calls per frame, ≤ ~80 buildings |
 
-## Dedicated neighborhood buses
+Phones have not been measured on a device; at 4–5× slower the default 10× playback should fit,
+20× at the morning peak may not.
 
-`makeCar("bus", id, development)` creates a purple 20-seat vehicle. `busDirection` restricts automatic bus assignments to inbound or outbound trips for its neighborhood. Before the original dispatch phases, available buses group eligible requests in the oldest request's direction and pass up to 20 requests to the existing multi-stop boarding/routing state machine. The remainder flows through the original sedan/shuttle phases.
+## Limits
 
-Bus counts and availability exclude vehicles marked `retiring`. Such vehicles complete their already assigned service; `retireFinishedBuses` removes them only when no passengers or pickups remain and clears all their road claims and viewing references. Additional buses fill the least-served development and removals favor the most-served, keeping coverage balanced. The live panel reports both assignments and pending retirements.
-
-## Opportunistic ride sharing
-
-`shareQueuedRides` runs before ordinary dispatch when the 0–100% slider is enabled. It rotates through at most four buses/shuttles per tick. `tryShareRide` considers up to 12 nearby unassigned requests, inserts pickup/dropoff pairs into a bounded set of stop positions, and includes the final depot return in its distance comparison. Directed Dijkstra routes are cached within each vehicle evaluation. Capacity is checked over the entire stop sequence, including future reservations.
-
-Existing stop order is immutable. Both total added driving and added driving before each existing stop must fit the remaining trip budget (up to four 100 m blocks at 100%). The accumulated extra distance is tracked until trip completion. Boarding time is additional and explicitly disclosed in the control. Replanning preserves the current edge and fractional progress; all road claims are replaced for the updated itinerary. Retiring and interactive vehicles are excluded, and buses retain neighborhood eligibility. A depot segment completes the shared trip through the existing vehicle state machine.
-
-## Scope and assumptions
-
-This remains an illustrative simulation, not an engineering traffic or accessibility model. The source's profiles, fleet, pooling strategy, traffic behavior and optional API narration are preserved. Routing still uses a simple Dijkstra queue and approximate alternate paths; “congestion” means route claims, not measured road capacity. Travel timing uses explicit road speeds and fixed simulation steps. No external map tiles, backend, geolocation or geographic dataset is needed.
-
-## Passenger timing and totals
-
-`simElapsed` advances monotonically while simulation time runs, independently of the daily display clock. Request timestamps, boarding timestamps and idle-depot timers use this clock. Each actual boarding calls `boardPassenger`; each delivered passenger calls `completePassenger` once. `completedCount` and `completedRideMinutes` accumulate without using the bounded history length. The HUD reports their ratio, while `completedTrips` retains only the latest 1,000 per-person ride/wait records. Daily clock rollover preserves ongoing timestamps; Reset day resets the clocks and aggregates.
-
-## Calibrated simulation steps
-
-`roadPath` marks neighborhood edges at 20 km/h and connector edges at 35 km/h; center grid edges use 25 km/h. `stepCars` spends elapsed seconds against each traversed edge's distance and speed, carrying remaining time across short curve segments. `simulationStep` advances the clock, dispatch, boarding, signals, traffic waits and obstacles together by three seconds. `tick` repeats whole steps according to playback speed, then renders once. Thus playback speed cannot lengthen passenger boarding or signal delays in simulated minutes. A seeded regression compares complete vehicle/queue/ride state at 1× and 20×.
-
-Emergency vehicles use ordinary road routing/movement with dedicated outbound, scene and return states. `directionalBlocks` records incident-specific directed closures; Dijkstra and movement both respect them, while responders bypass their own incident's closure. Scene timers and rare-event schedules use `simElapsed`. Recovery requeues unboarded reservations and transfers existing rider request objects into dropoff-only segments, preserving timing and completion accounting. Route retries retain riders without replaying transfers. Emergency fleets are separate from public fleet controls and are removed after returning; repaired public vehicles return to the depot.
-
-Private traffic uses `kind: human`, ordinary `stepCars` routing/traffic control, and `human_done` cleanup. `tickHumanTraffic` accumulates arrival credit against the original expected human obstacle rate (79.5 ticks × 3 kinds); the old human obstacle slot is skipped so jaywalker/truck rates stay unchanged. A directed-lane snapshot and `followingRoom` constrain per-tick travel behind leaders with an eight-meter gap, looking across subsequent route segments. Gridlock decomposition classifies edge claim IDs by vehicle kind and adds deduplicated active obstruction segments. The chart renders as responsive HTML bars with numeric values and percentages.
-
-Flexible train stops cache each building's nearest projection onto the domestic rail alignment. `nextLocalTrainStop` chooses the nearest onboard dropoff or compatible nearby unassigned pickup; `serveLocalTrainStop` removes requests from the shared queue only at boarding, records normal passenger timestamps, and retains destination stop distances. A separate local dwell type preserves the scheduled leg and station order. Requests with opposite-direction destinations, distant endpoints or no remaining seat stay with road dispatch.
-
-Through rail service retains a separate `parkRailDistance` inside the extended polyline. Each scheduled event queues two opposing trains with monotonic `dueAt` timestamps 15 simulated minutes apart; neither changes direction. The first daily event is 1.5 sim minutes after `DAY_START` (three seconds at 1×), and reset rearms it. Station dwell advances toward the next station or opposite off-map portal. Rendering offsets the two directions onto parallel tracks; crossing closures are the union of every active train’s complete footprint. Flexible stops project onto the domestic Central–Juniper segment only.
-
-The development connectors use sampled sinusoidal offsets while preserving their endpoints. Interstate carriageways have directed mainline edges and curved directed ramps connected at the farthest development entry. Mainline portal nodes are excluded from map fitting so roads run off-map. Human traffic has a baseline visit stream plus a bounded retained pool `(slider - 1) * 5`; retained cars alternate local trips and short destination waits, and excess cars are flagged to leave via on-ramps when the slider falls. Following lookahead covers highway speeds.
+This is an illustrative model, not a calibrated forecast. Trips and their timing are modelled
+from Census counts and stated assumptions; road capacity ignores turn lanes and signal
+coordination; parking capacities are mostly estimated from footprints; building heights are
+mostly defaults by type; pooling at coarse sampling still sees a sparser demand than reality.

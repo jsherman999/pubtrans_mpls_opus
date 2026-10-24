@@ -120,7 +120,7 @@ Publish the repository's `main` branch, `/ (root)`, in Settings → Pages. `.noj
 
 ## Implementation
 
-All runtime code is in `index.html`. See [ARCHITECTURE.md](ARCHITECTURE.md) for the source app's subsystems and adaptation details.
+All runtime code is in `index.html`. See [SOURCE_ARCHITECTURE.md](SOURCE_ARCHITECTURE.md) for the source app's subsystems and adaptation details.
 
 ## Emergencies and roadside recovery
 

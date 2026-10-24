@@ -36,7 +36,8 @@ The box is a parameter of `tools/build_osm.py` and can be widened later without 
 ## Phases
 
 ### Phase 0 — Bootstrap ✅
-- Import the source app unchanged (`index.html`, `tests/simulation.cjs`, `ARCHITECTURE.md`),
+- Import the source app unchanged (`index.html`, `tests/simulation.cjs`, `ARCHITECTURE.md`, now
+  `docs/SOURCE_ARCHITECTURE.md`),
   keep its README as `docs/SOURCE_README.md`, add this plan, `.nojekyll`, `.gitignore`.
 - Exit: repo builds and serves exactly like the source; plan committed.
 
@@ -396,8 +397,24 @@ Split into four steps so each lands green on its own.
   two-panel `sweep.svg` and per-run CSVs, and repeats exactly). The page test reads the panel.
 - **Exit:** `node tools/run_scenario.cjs --vary fleet=...` produces the CSV and the chart above.
 
-### Phase 9 — Polish and publish
-- README/ARCHITECTURE rewrite, attribution footer, mobile layout pass, GitHub Pages.
+### Phase 9 — Polish and publish ✅
+- `README.md` rewritten for visitors: what the simulation models, how to use the page,
+  the fleet-size results, running locally, headless runs and sweeps, data builds, tests, limits
+  and credits, with screenshots in `docs/img/` (desktop, driver view, street map, phone).
+- New `ARCHITECTURE.md` for the real-street engine (modules, data, step order, routing, motion,
+  sampling, demand, pages, performance); the source app's architecture moved to
+  `docs/SOURCE_ARCHITECTURE.md`.
+- Attribution: OpenStreetMap (ODbL) and Census credits in both pages' footers, the simulation's
+  key and the README.
+- Phone pass: the footer credit no longer runs under the Fit/Resume buttons and hides while the
+  controls sheet is open; the viewer's title card leaves room for its buttons.
+- Tests: `node tests/publish.test.cjs` (every referenced script, stylesheet and image exists and
+  is relative, nothing loads from another host, titles and phone viewports, credits, local doc
+  links resolve, data and screenshot size budgets, `.nojekyll`, no raw downloads or caches
+  committed).
+- GitHub Pages: serve `main` from the repository root (Settings → Pages → Deploy from a branch).
+  The site is then https://jsherman999.github.io/pubtrans_mpls_opus/.
+- **Exit:** all suites pass; the pages load without console errors in desktop and phone Chrome.
 
 ## Performance budget (targets)
 
@@ -434,4 +451,4 @@ Split into four steps so each lands green on its own.
 | 7 | done | 10,680 OSM buildings with heights (parts for towers), footprints on the map, ride-along Driver POV with culling and LOD, six landmark designs; ~0.5 ms per POV frame in desktop Chrome downtown. |
 | Fleet fix | done | Riders/fleet 1:10 (sweeps 1:5), cars 1:20; dispatch index and rebalancing fixes; all-transit scenario is street-bound (~105k riders by 10:00), transit-kept scenario needs ~4,000 vehicles for 8.7 min. |
 | 8 | done | Metrics (VMT/VHT, deadhead, occupancy, utilisation, distributions, series, bridge loads), CSV export on the page, `tools/run_scenario.cjs` sweeps with CSV + SVG chart, recorded in `docs/results/`. |
-| 9 | not started | |
+| 9 | done | README and ARCHITECTURE rewritten with screenshots, credits on both pages and in the README, phone layout fixes, publish checks (`tests/publish.test.cjs`). Pages to be enabled in the repository settings (main, root). |
