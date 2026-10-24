@@ -80,7 +80,7 @@ swipe it right or tap **‹ Map** to go back; a slow drag still pans the map):
   empty share, occupancy, utilisation, wait and ride percentiles) with CSV downloads, the
   **Chokepoints** (river bridges, freeway ramps, map-edge entries) and an event log.
 
-<img src="docs/img/phone.jpg" width="260" alt="The simulation on a phone in dark mode: the map fills the screen, with a Stats and controls tab on the right edge"> <img src="docs/img/phone-panel.jpg" width="260" alt="The panel page on a phone after swiping left: playback and live state, scrolling up and down, with a Map button at the top">
+<img src="docs/img/phone.jpg" width="260" alt="The simulation on a phone at 08:13 on a Wednesday, zoomed into downtown: congested streets in red and orange, the Stats and controls tab on the right edge"> <img src="docs/img/phone-panel.jpg" width="260" alt="The panel page after swiping left: playback, then live state with 22,340 vehicles on the road and 970 riders waiting, and the wait and queue charts">
 
 `viewer.html` is the street map on its own: tap a street for its speed, lanes, direction and
 OSM way, or **Plan a route** to compare the fastest car route with the fastest shuttle route.
