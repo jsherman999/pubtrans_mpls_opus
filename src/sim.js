@@ -25,6 +25,10 @@
   const NODE_PORTAL = 1;
 
   const CAPACITY = { sedan: 4, shuttle: 8, bus: 20, police: 4, fire: 6, firecar: 4, recovery: 8, private: 1 };
+  // Battery-electric fleet (Phase 6): usable battery kWh, consumption kWh/km, charging kW.
+  const BATTERY = { sedan: [60, 0.18, 50], shuttle: [110, 0.32, 150], bus: [400, 1.3, 150] };
+  const CHARGE_BELOW = 0.25, CHARGE_TO = 0.8, MIN_DISPATCH = 0.15;   // state of charge thresholds
+  const IDLE_HOLD = 30 * 60;   // s an idle vehicle waits for nearby demand when rebalancing is on
   const PCU = { bus: 2, fire: 2, recovery: 1.5 };   // lane space and stop-line time, in cars
   const FLEET_KINDS = ["sedan", "shuttle", "bus"];
   const FLEET_KEY = { sedan: "sedans", shuttle: "shuttles", bus: "buses" };   // settings keys
@@ -62,7 +66,10 @@
     day: 2,                             // 0 = Monday ... 6 = Sunday
     carShare: 0.5,                      // share of today's car trips still made by private car;
                                         // the rest switch to SDEV shuttles (most cars replaced)
-    demandFleet: { sedans: 60, shuttles: 260, buses: 60 },   // agents (× sampling real vehicles)
+    transitReplaced: true,              // today's transit riders ride SDEV shuttles (else not simulated)
+    rebalance: true,                    // idle vehicles move toward expected demand (Census demand)
+    ev: true,                           // battery-electric fleet: range, charging at depots
+    demandFleet: { sedans: 150, shuttles: 650, buses: 150 },  // agents (× sampling real vehicles); the fleet sweep's pick for a 15-min wait
     rareEvents: true,
   };
 
@@ -98,7 +105,9 @@
     const settings = {
       population: opts.population, sedans: opts.sedans, shuttles: opts.shuttles, buses: opts.buses,
       rideSharing: opts.rideSharing, privateTraffic: opts.privateTraffic,
+      depots: null,
       day: opts.day, events: opts.events ?? (demand ? Dm.DEFAULTS.events : []), carShare: opts.carShare,
+      transitReplaced: opts.transitReplaced, rebalance: opts.rebalance && !!demand, ev: opts.ev,
     };
 
     // ------------------------------------------------------------------ geography
@@ -266,9 +275,11 @@
       for (const p of places) (byType[p.type] = byType[p.type] || []).push(p);
       S = {
         t: 0, minute: dayStart, day: 0, dayOfWeek: settings.day,
-        trips: [], walked: 0, unrouted: 0, completedPeople: 0, plan: null, carTrips: 0, shuttleTrips: 0,
+        trips: [], walked: 0, unrouted: 0, completedPeople: 0, plan: null, carTrips: 0, shuttleTrips: 0, transitTrips: 0,
+        forecast: [], repositions: 0, chargeSessions: 0, energyKwh: 0, flat: 0,
         places, byType,
-        depots: opts.depots.map((d) => snapSite(d, "depot")),
+        // Depots keep their open/closed state and additions across Reset day.
+        depots: settings.depots ? settings.depots.map((d) => ({ ...d })) : opts.depots.map((d) => ({ ...snapSite(d, "depot"), active: d.active !== false })),
         base: snapSite(opts.base, "base"),
         humans: [], agenda: [], agendaPos: 0,
         queue: [], vehicles: [], parked: [], atPortal: [], incidents: [], closures: new Map(),
@@ -371,6 +382,7 @@
       S.trips = plan.trips;
       S.agendaPos = 0;
       while (S.agendaPos < S.trips.length && S.trips[S.agendaPos].minute < S.minute) S.agendaPos++;
+      S.forecast = settings.rebalance ? buildForecast() : [];
       log("DEMAND", `${plan.summary.day}: ${Math.round(plan.summary.personTrips).toLocaleString()} trips planned, ${plan.summary.simulatedAgentTrips.toLocaleString()} agents at 1:${scale}`);
     }
     function releaseTrips() {
@@ -380,6 +392,7 @@
         // Today's drivers keep their cars with probability carShare (per sampled person and
         // trip leg: both legs of one tour are decided alike via the trip's tag).
         const mode = tr.mode === "drive" && !keepsCar(tr) ? "shuttle" : tr.mode;
+        if (mode === "shuttle" && tr.mode === "shuttle" && !settings.transitReplaced) { S.transitTrips += tr.weight; continue; }
         if (mode === "shuttle") {
           const fromPortal = tr.from.sector != null ? pickPortal(sectorEntries, tr.from.sector) : null;
           const toPortal = tr.to.sector != null ? pickPortal(sectorExits, tr.to.sector) : null;
@@ -452,6 +465,7 @@
         S.minute = dayStart + (S.minute - 24 * 60);
         S.day++;
         if (demand) { S.dayOfWeek = (S.dayOfWeek + 1) % 7; planDay(); }
+        for (const v of S.vehicles) if (v.battery) { v.kwh = v.battery; if (v.state === "charging") v.state = "idle"; }   // overnight charging
         S.agendaPos = 0;
         while (S.agendaPos < S.agenda.length && S.agenda[S.agendaPos].minute < S.minute) S.agendaPos++;
       }
@@ -468,7 +482,7 @@
       S.completed++;
       S.completedPeople += r.weight || 1;
       S.rideSeconds += S.t - r.pickedUpAt;
-      S.recentTrips.push({ ride: S.t - r.pickedUpAt, wait: r.pickedUpAt - r.requestedAt });
+      S.recentTrips.push({ ride: S.t - r.pickedUpAt, wait: r.pickedUpAt - r.requestedAt, assign: (r.assignedAt ?? r.pickedUpAt) - r.requestedAt, purpose: r.profile, hub: !!r.from.hub });
       if (S.recentTrips.length > 1000) S.recentTrips.splice(0, S.recentTrips.length - 1000);
       return true;
     }
@@ -502,6 +516,7 @@
       };
       motion.place(v, node);
       v.heading = 0;
+      if (FLEET_KINDS.includes(kind)) initBattery(v);
       S.vehicles.push(v);
       return v;
     }
@@ -518,8 +533,9 @@
       let have = countFleet(kind);
       // Revive retiring vehicles first, then add at depots in turn.
       for (const v of S.vehicles) if (have < n && v.kind === kind && v.retiring) { v.retiring = false; have++; }
+      const homes = activeDepots();
       while (have < n) {
-        const depot = S.depots[(S.seq[kind] || 0) % S.depots.length];
+        const depot = homes[(S.seq[kind] || 0) % homes.length];
         const v = makeVehicle(kind, depot.node);
         v.depot = depot;
         have++;
@@ -535,12 +551,32 @@
         if (v.state === "idle") sendToDepot(v);
       }
     }
-    const atDepot = (v) => v.lane < 0 && S.depots.some((d) => d.node === v.node);
+    const activeDepots = () => S.depots.filter((d) => d.active);
+    const atDepot = (v) => v.lane < 0 && S.depots.some((d) => d.active && d.node === v.node);
     function nearestDepot(v) {
       const node = anchorNode(v);
-      let best = S.depots[0], bd = Infinity;
-      for (const d of S.depots) { const dd = dist(node, d.node); if (dd < bd) { bd = dd; best = d; } }
-      return best;
+      let best = null, bd = Infinity;
+      for (const d of S.depots) { if (!d.active) continue; const dd = dist(node, d.node); if (dd < bd) { bd = dd; best = d; } }
+      return best || S.depots[0];
+    }
+    // Depots can be switched off (their vehicles move to the nearest open one) or added at any
+    // curbside node; at least one stays open.
+    function setDepotActive(i, on) {
+      const d = S.depots[i];
+      if (!d || (!on && activeDepots().length <= 1 && d.active)) return false;
+      d.active = !!on;
+      settings.depots = S.depots.map((x) => ({ ...x }));
+      log("FLEET", `${d.name} ${on ? "opened" : "closed"}`);
+      return true;
+    }
+    function addDepot(node, name) {
+      if (!core.inCore[node]) return null;
+      const d = { name: name || `Depot · ${streetName(node)}`, kind: "depot", node, x: nx[node], y: ny[node], active: true, added: true };
+      S.depots.push(d);
+      settings.depots = S.depots.map((x) => ({ ...x }));
+      stopNode[node] = 1;
+      log("FLEET", `${d.name} opened`);
+      return d;
     }
     // Node a vehicle's next route starts from: its node when parked, else the end of its arc.
     function anchorNode(v) { return v.lane >= 0 ? arcs[v.route[v.ri]].to : v.node; }
@@ -614,18 +650,61 @@
     }
 
     // ------------------------------------------------------------------ dispatch (source dispatch)
-    // Nearest idle vehicle of a kind to a node, by straight-line distance. During dispatch the
-    // idle vehicles are listed once, so a long queue with no free vehicles costs little.
-    let idleList = null;
+    // A vehicle free for a new trip: idle or repositioning, not retiring, enough charge.
+    const available = (v) => (v.state === "idle" || v.state === "repositioning") && !v.retiring &&
+      FLEET_KINDS.includes(v.kind) && (!v.battery || v.kwh >= MIN_DISPATCH * v.battery);
+    // Nearest available vehicle of a kind to a node. During dispatch the available vehicles sit
+    // in a 400 m grid per kind and the search widens ring by ring, so a large fleet and a long
+    // queue cost little; otherwise every vehicle is checked.
+    const GRID = 400;
+    let idleIndex = null;
+    const cellOf = (node) => Math.floor(ny[node] / GRID) * 4096 + Math.floor(nx[node] / GRID);
+    function indexAvailable() {
+      idleIndex = new Map();
+      for (const v of S.vehicles) {
+        if (!available(v)) continue;
+        let byCell = idleIndex.get(v.kind);
+        if (!byCell) idleIndex.set(v.kind, (byCell = new Map()));
+        const c = cellOf(anchorNode(v));
+        if (!byCell.has(c)) byCell.set(c, []);
+        byCell.get(c).push(v);
+      }
+      return idleIndex;
+    }
     function findIdle(kind, node) {
       let best = null, bd = Infinity;
-      for (const v of idleList || S.vehicles) {
-        if (v.kind !== kind || v.state !== "idle" || v.retiring) continue;
-        const d = dist(anchorNode(v), node);
-        if (d < bd) { bd = d; best = v; }
+      if (!idleIndex) {
+        for (const v of S.vehicles) {
+          if (v.kind !== kind || !available(v)) continue;
+          const d = dist(anchorNode(v), node);
+          if (d < bd) { bd = d; best = v; }
+        }
+        return best;
+      }
+      const byCell = idleIndex.get(kind);
+      if (!byCell || !byCell.size) return null;
+      const cx = Math.floor(nx[node] / GRID), cy = Math.floor(ny[node] / GRID);
+      const maxRing = Math.ceil(Math.max(graph.width, graph.height) / GRID) + 1;
+      for (let ring = 0; ring <= maxRing; ring++) {
+        for (let y = cy - ring; y <= cy + ring; y++) for (let x = cx - ring; x <= cx + ring; x++) {
+          if (ring && y !== cy - ring && y !== cy + ring && x !== cx - ring && x !== cx + ring) continue;
+          const list = byCell.get(y * 4096 + x);
+          if (!list) continue;
+          for (const v of list) {
+            if (!available(v)) continue;          // taken earlier in this dispatch
+            const d = dist(anchorNode(v), node);
+            if (d < bd) { bd = d; best = v; }
+          }
+        }
+        if (best && bd <= ring * GRID) break;     // nothing outside this ring can be nearer
       }
       return best;
     }
+    // Riders are pooled by area: cells of pooling% × 6 m (600 m at 100 %) at both ends.
+    const poolKey = (node) => {
+      const c = settings.rideSharing * 6;
+      return c < 50 ? node : Math.floor(ny[node] / c) * 100000 + Math.floor(nx[node] / c);
+    };
     // Greedy nearest-neighbour visiting order over nodes.
     function nearestOrder(start, nodes) {
       const rest = nodes.slice(), order = [];
@@ -654,17 +733,20 @@
       const dropOrder = nearestOrder(pickupOrder[pickupOrder.length - 1], [...drops.keys()]);
       const segments = [];
       let cursor = start;
+      // Reachability only (the route itself is planned when each leg starts): tree lookups.
       for (const node of pickupOrder) {
-        if (!routeAvoiding(cursor, node, v.mode)) return false;
+        if (routeLength(cursor, node, v.mode) == null) return false;
         segments.push({ type: "pickup", node, reqs: pickups.get(node) });
         cursor = node;
       }
       for (const node of dropOrder) {
-        if (!routeAvoiding(cursor, node, v.mode)) return false;
+        if (routeLength(cursor, node, v.mode) == null) return false;
         segments.push({ type: "dropoff", node, reqs: drops.get(node) });
         cursor = node;
       }
       v.sharingDetour = 0;
+      v.assignTag = tag; v.sharedCount = 0;
+      for (const r of reqs) r.assignedAt = S.t;
       v.pickupQueue = reqs.slice();
       v.riders = [];
       v.segments = segments;
@@ -688,9 +770,8 @@
 
     function dispatch() {
       if (!S.queue.length) return;
-      idleList = S.vehicles.filter((v) => v.state === "idle" && !v.retiring && FLEET_KINDS.includes(v.kind));
-      if (idleList.length) assignAll();
-      idleList = null;
+      if (indexAvailable().size) assignAll();
+      idleIndex = null;
     }
     function assignAll() {
       const done = new Set();
@@ -700,8 +781,9 @@
         for (const r of pending()) { const k = keyFn(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }
         return m;
       };
+      const pooling = settings.rideSharing > 0;
       // A — origin sweeps under heavy backlog: a bus (or shuttle) collects the busiest origin.
-      while (S.queue.length - done.size >= SURGE_QUEUE) {
+      while (pooling && S.queue.length - done.size >= SURGE_QUEUE) {
         let best = null;
         for (const [, reqs] of groupBy((r) => r.pickup)) if (reqs.length >= SWEEP_MIN && (!best || reqs.length > best.length)) best = reqs;
         if (!best) break;
@@ -712,8 +794,8 @@
         for (const r of group) done.add(r.id);
         S.pooled += group.length;
       }
-      // B — sedan carpools: 2–4 riders with the same pickup and destination.
-      for (const [, reqs] of groupBy((r) => r.pickup + ">" + r.dropoff)) {
+      // B — sedan carpools: 2–4 riders with the same pickup and destination area.
+      if (pooling) for (const [, reqs] of groupBy((r) => r.pickup + ">" + poolKey(r.dropoff))) {
         let rest = reqs.filter((r) => !done.has(r.id));
         while (rest.length >= 2) {
           const v = findIdle("sedan", rest[0].pickup);
@@ -725,9 +807,10 @@
           rest = rest.filter((r) => !done.has(r.id));
         }
       }
-      // C — pools: 2+ riders to the same destination within the pooling window; a bus when
-      // more riders than a shuttle seats.
-      for (const [, reqs] of groupBy((r) => r.dropoff)) {
+      // C — pools: 2+ riders from the same area to the same area within the pooling window (on
+      // the source's small grid any pickups would do; across 6 km they make long tours); a bus
+      // when more riders than a shuttle seats.
+      if (pooling) for (const [, reqs] of groupBy((r) => poolKey(r.pickup) + ">" + poolKey(r.dropoff))) {
         const poolable = reqs.filter((r) => !done.has(r.id) && S.t - r.requestedAt < POOL_WINDOW);
         if (poolable.length < 2) continue;
         const v = (poolable.length > CAPACITY.shuttle && findIdle("bus", poolable[0].pickup)) || findIdle("shuttle", poolable[0].pickup);
@@ -755,18 +838,118 @@
       if (!driveTo(v, d.node)) { v.state = "idle"; v.idleSince = S.t; }
     }
     // Idle vehicles that linger away from a depot drive to the nearest one (source returnIdleCars).
+    // With rebalancing on, idle vehicles wait where they are for up to IDLE_HOLD (they are moved
+    // toward expected demand instead); low batteries go to charge.
     function returnIdle() {
       for (const v of S.vehicles.slice()) {
-        if (v.state !== "idle" || !FLEET_KINDS.includes(v.kind) || atDepot(v)) continue;
-        if (S.t - v.idleSince < IDLE_RETURN && !v.retiring) continue;
+        if (v.state !== "idle" || !FLEET_KINDS.includes(v.kind)) continue;
+        if (needsCharge(v)) { goCharge(v); continue; }
+        if (atDepot(v)) continue;
+        const hold = settings.rebalance ? IDLE_HOLD : IDLE_RETURN;
+        if (S.t - v.idleSince < hold && !v.retiring) continue;
         sendToDepot(v);
+      }
+    }
+
+    // ------------------------------------------------------------------ electric fleet (Phase 6)
+    function initBattery(v) {
+      const b = BATTERY[v.kind];
+      if (!b) return;
+      v.battery = b[0]; v.kwh = b[0]; v.kwhPerKm = b[1]; v.chargeKw = b[2]; v.lastOdo = v.odo;
+    }
+    const needsCharge = (v) => settings.ev && v.battery && v.kwh < CHARGE_BELOW * v.battery;
+    function goCharge(v) {
+      const d = nearestDepot(v);
+      v.depot = d; v.active = null; v.segments = [];
+      v.state = "to_charge";
+      if (!driveTo(v, d.node)) { v.state = "idle"; v.idleSince = S.t; }
+    }
+    // Energy used since the last step from the odometer; charging adds energy at the depot.
+    function tickEnergy() {
+      if (!settings.ev) return;
+      for (const v of S.vehicles) {
+        if (!v.battery) continue;
+        const km = (v.odo - v.lastOdo) / 1000;
+        v.lastOdo = v.odo;
+        if (km > 0) {
+          const used = km * v.kwhPerKm;
+          S.energyKwh += Math.min(used, v.kwh) * scale;
+          if (v.kwh > 0 && v.kwh - used <= 0) S.flat++;
+          v.kwh = Math.max(0, v.kwh - used);
+        }
+        if (v.state === "charging") {
+          v.kwh = Math.min(v.battery, v.kwh + v.chargeKw * STEP / 3600);
+          if (v.kwh >= CHARGE_TO * v.battery) { v.state = "idle"; v.idleSince = S.t; S.chargeSessions++; }
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------ rebalancing (Phase 6)
+    // Expected demand comes from another realisation of today's plan (a different seed), the
+    // stand-in for what history would say; the dispatcher does not see the actual requests early.
+    function buildForecast() {
+      if (!demand) return [];
+      const other = demand.generate({ day: S.dayOfWeek, seed: opts.seed + S.day + 7777, sampling: scale, events: settings.events, dayStart });
+      const out = [];
+      for (const tr of other.trips) {
+        if (tr.mode === "walk") continue;
+        let node = null;
+        if (tr.from.zone != null) node = zoneNode[tr.from.zone];
+        else { const s = sectorEntries[tr.from.sector]; if (s.portals.length) node = hubFor(s.portals[0])?.node ?? null; }
+        if (node != null) out.push({ minute: tr.minute, node, mode: tr.mode, tag: tr.tag });
+      }
+      return out;
+    }
+    const REBALANCE_GRID = 800;
+    function rebalance() {
+      if (!settings.rebalance || !S.forecast.length) return;
+      const wouldRide = (f) => (f.mode === "shuttle" ? settings.transitReplaced : (f.tag % 1000) / 1000 >= settings.carShare);
+      // Expected pickups in the next 30 minutes per 800 m cell, and the busiest node in each.
+      const cellKey = (node) => Math.floor(ny[node] / REBALANCE_GRID) * 4096 + Math.floor(nx[node] / REBALANCE_GRID);
+      const need = new Map();
+      let lo = 0, hi = S.forecast.length;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (S.forecast[m].minute < S.minute) lo = m + 1; else hi = m; }
+      for (let i = lo; i < S.forecast.length && S.forecast[i].minute < S.minute + 30; i++) {
+        const f = S.forecast[i];
+        if (!wouldRide(f)) continue;
+        const k = cellKey(f.node);
+        let c = need.get(k);
+        if (!c) need.set(k, (c = { k, n: 0, nodes: new Map() }));
+        c.n++; c.nodes.set(f.node, (c.nodes.get(f.node) || 0) + 1);
+      }
+      // Idle vehicles by cell (those already repositioning count where they are headed).
+      const idle = [], have = new Map();
+      for (const v of S.vehicles) {
+        if (!FLEET_KINDS.includes(v.kind) || v.retiring || (v.battery && v.kwh < CHARGE_BELOW * v.battery)) continue;
+        if (v.state === "repositioning") { const k = cellKey(v.target); have.set(k, (have.get(k) || 0) + 1); }
+        else if (v.state === "idle" && S.t - v.idleSince >= 60) { idle.push(v); const k = cellKey(anchorNode(v)); have.set(k, (have.get(k) || 0) + 1); }
+      }
+      if (!idle.length) return;
+      // One idle vehicle for every four expected pickups in the next half hour.
+      const deficits = [...need.values()].map((c) => ({ ...c, gap: Math.ceil(c.n / 4) - (have.get(c.k) || 0) }))
+        .filter((c) => c.gap > 0).sort((a, b) => b.gap - a.gap);
+      const spare = idle.filter((v) => { const k = cellKey(anchorNode(v)); const want = Math.ceil((need.get(k)?.n || 0) / 4); return (have.get(k) || 0) > want; });
+      let moves = Math.max(3, Math.ceil(idle.length * 0.2));
+      for (const c of deficits) {
+        const target = [...c.nodes.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        for (let g = 0; g < c.gap && moves > 0 && spare.length; g++) {
+          let bi = -1, bd = 3000;
+          for (let i = 0; i < spare.length; i++) { const d = dist(anchorNode(spare[i]), target); if (d < bd) { bd = d; bi = i; } }
+          if (bi < 0) break;
+          const v = spare.splice(bi, 1)[0];
+          const from = cellKey(anchorNode(v));
+          have.set(from, (have.get(from) || 0) - 1);
+          v.state = "repositioning";
+          if (driveTo(v, target)) { moves--; S.repositions++; } else { v.state = "idle"; }
+        }
+        if (!moves || !spare.length) break;
       }
     }
 
     // ------------------------------------------------------------------ ride sharing (source tryShareRide)
     function sharingStops(v) {
       const d = nearestDepot(v);
-      if (v.state === "idle" || v.state === "returning") return [{ type: "depot", node: d.node, reqs: [] }];
+      if (v.state === "idle" || v.state === "returning" || v.state === "repositioning") return [{ type: "depot", node: d.node, reqs: [] }];
       const stops = [v.active, ...v.segments].filter(Boolean).map((s) => ({ type: s.type, node: s.node, reqs: s.reqs }));
       if (stops.length && stops[stops.length - 1].type !== "depot") stops.push({ type: "depot", node: d.node, reqs: [] });
       return stops;
@@ -780,9 +963,10 @@
       }
       return load === 0;
     }
-    function tryShareRide(v) {
+    function tryShareRide(v, only = null) {
       if (!settings.rideSharing || !S.queue.length || v.retiring || (v.kind !== "bus" && v.kind !== "shuttle")) return false;
-      if (!["idle", "returning", "enroute_pickup", "enroute_dropoff"].includes(v.state)) return false;
+      if (!["idle", "returning", "repositioning", "enroute_pickup", "enroute_dropoff"].includes(v.state)) return false;
+      if (v.battery && v.kwh < CHARGE_BELOW * v.battery) return false;
       if (v.state === "idle" && atDepot(v)) return false;
       const anchor = anchorNode(v);
       const stops = sharingStops(v);
@@ -801,7 +985,7 @@
         for (const p of points) { const d = dist(r.pickup, p); if (d < m) m = d; }
         return m;
       };
-      const candidates = S.queue.map((r) => ({ r, near: proximity(r) }))
+      const candidates = (only || S.queue).map((r) => ({ r, near: proximity(r) }))
         .filter((c) => c.near <= allowance)
         .sort((a, b) => a.near - b.near || a.r.requestedAt - b.r.requestedAt).slice(0, 12);
       if (!candidates.length) return false;
@@ -871,6 +1055,8 @@
           if (!best || total < best.total) best = { list, total, extra };
         }
         if (!best) continue;
+        r.assignedAt = S.t;
+        v.sharedCount = (v.sharedCount || 0) + 1;
         v.pickupQueue.push(r);
         v.segments = best.list.map((s) => ({ type: s.type, node: s.node, reqs: s.reqs }));
         v.sharingDetour += best.extra;
@@ -888,12 +1074,30 @@
       for (let i = v.ri + 1; i < v.route.length; i++) l += motion.len[v.route[i]];
       return l;
     }
+    // Bounded work per step, from both sides: the oldest waiting riders each ask the nearest few
+    // shuttles and buses already on the move (grid lookup), and two vehicles in turn scan the
+    // queue for riders along their way (the source rotated four vehicles a tick).
     function shareQueuedRides() {
       if (!settings.rideSharing || !S.queue.length) return;
-      const fleet = S.vehicles.filter((v) => (v.kind === "bus" || v.kind === "shuttle") && !v.retiring);
-      // Bounded work per step, rotating through the fleet (source: four vehicles per tick).
-      for (let i = 0; i < Math.min(4, fleet.length); i++) tryShareRide(fleet[(S.sharingCursor + i) % fleet.length]);
-      S.sharingCursor = fleet.length ? (S.sharingCursor + 4) % fleet.length : 0;
+      const fleet = S.vehicles.filter((v) => (v.kind === "bus" || v.kind === "shuttle") && !v.retiring &&
+        (v.state === "enroute_pickup" || v.state === "enroute_dropoff" || v.state === "returning" || v.state === "repositioning"));
+      if (fleet.length) {
+        const grid = new Map();
+        for (const v of fleet) { const c = cellOf(anchorNode(v)); if (!grid.has(c)) grid.set(c, []); grid.get(c).push(v); }
+        let asked = 0;
+        for (const r of S.queue) {
+          if (asked >= 8) break;
+          if (r.shareTriedAt != null && S.t - r.shareTriedAt < 60) continue;
+          r.shareTriedAt = S.t; asked++;
+          const cx = Math.floor(nx[r.pickup] / GRID), cy = Math.floor(ny[r.pickup] / GRID), near = [];
+          for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 1; x <= cx + 1; x++) for (const v of grid.get(y * 4096 + x) || []) near.push(v);
+          near.sort((a, b) => dist(anchorNode(a), r.pickup) - dist(anchorNode(b), r.pickup));
+          for (const v of near.slice(0, 4)) if (S.queue.includes(r) && tryShareRide(v, [r])) break;
+        }
+      }
+      const all = S.vehicles.filter((v) => (v.kind === "bus" || v.kind === "shuttle") && !v.retiring);
+      for (let i = 0; i < Math.min(2, all.length); i++) tryShareRide(all[(S.sharingCursor + i) % all.length]);
+      S.sharingCursor = all.length ? (S.sharingCursor + 2) % all.length : 0;
     }
 
     // ------------------------------------------------------------------ arrivals and boarding
@@ -905,6 +1109,14 @@
       v.troublePending = false;
       if (v.state === "stranded" || v.state === "trouble" || v.state === "repair") return;
       if (v.state === "idle") { v.idleSince = S.t; return; }
+      if (v.state === "repositioning") {
+        if (v.node !== v.target && driveTo(v, v.target)) return;
+        v.state = "idle"; v.idleSince = S.t; return;
+      }
+      if (v.state === "to_charge") {
+        if (v.node !== v.depot.node && driveTo(v, v.depot.node)) return;
+        v.state = "charging"; return;
+      }
       // Pulled over short of the stop (a breakdown check or replan cut the route): keep going.
       const goal = v.active ? v.active.node : v.state === "returning" && v.depot ? v.depot.node : v.node;
       if (v.node !== goal) { if (!driveTo(v, goal)) strand(v, goal); return; }
@@ -1188,7 +1400,7 @@
     }
 
     // Drivers stuck in a queue for a minute, with real congestion still ahead, look for a faster
-    // way to where they are going: up to two per step (longest wait first), at most every two
+    // way to where they are going: one per step (longest wait first), at most every two
     // minutes each (ten after finding nothing better). Freeway through-traffic
     // and responders keep their routes.
     function rerouteQueued() {
@@ -1201,7 +1413,7 @@
       cands.sort((a, b) => b.queuedFor - a.queuedFor);
       let tries = 0;
       for (const v of cands) {
-        if (tries >= 2) break;
+        if (tries >= 1) break;
         v.rerouteAfter = S.t + 600;   // look again in ten minutes unless a better way turns up
         // Worth a search only if the rest of the route runs into real congestion.
         if (!congestion.pathDelayed(v.route.slice(v.ri + 1))) continue;
@@ -1232,14 +1444,17 @@
       shareQueuedRides();
       dispatch();
       returnIdle();
+      if (S.t % 300 === 0) rebalance();
       moveVehicles();
+      tickEnergy();
       if (S.t % congestion.PERIOD === 0) congestion.update(S.t, S.vehicles);
       if (Math.round(S.t / STEP) % 20 === 0) sample();
     }
     function run(n) { for (let i = 0; i < n; i++) step(); }
 
     function counts() {
-      const c = { onRoad: 0, queued: 0, atSignal: 0, fleetBusy: 0, fleetIdle: 0, private: 0, through: 0, responders: 0, parked: 0, privateCars: 0, byKind: {} };
+      const c = { onRoad: 0, queued: 0, atSignal: 0, fleetBusy: 0, fleetIdle: 0, private: 0, through: 0, responders: 0, parked: 0, privateCars: 0, byKind: {},
+        charging: 0, repositioning: 0, lowBattery: 0, socSum: 0, socN: 0 };
       for (const v of S.vehicles) {
         c.byKind[v.kind] = (c.byKind[v.kind] || 0) + 1;
         if (v.lane >= 0) {
@@ -1247,7 +1462,13 @@
           if (v.waiting === "queue") c.queued++;
           else if (v.waiting === "signal" || v.waiting === "stop") c.atSignal++;
         }
-        if (FLEET_KINDS.includes(v.kind)) { if (v.state === "idle") c.fleetIdle++; else c.fleetBusy++; }
+        if (FLEET_KINDS.includes(v.kind)) {
+          if (v.state === "idle" || v.state === "repositioning") c.fleetIdle++;
+          else if (v.state === "charging" || v.state === "to_charge") c.charging++;
+          else c.fleetBusy++;
+          if (v.state === "repositioning") c.repositioning++;
+          if (v.battery) { c.socSum += v.kwh / v.battery; c.socN++; if (v.kwh < CHARGE_BELOW * v.battery) c.lowBattery++; }
+        }
         else if (v.kind === "private") {
           if (v.through) c.through++; else c.private++;
           if (v.lane >= 0) c.privateCars += v.pcu;
@@ -1255,6 +1476,7 @@
         else c.responders++;
       }
       c.parked = S.parked.length;
+      c.soc = c.socN ? c.socSum / c.socN : null;
       return c;
     }
     function sample() {
@@ -1328,6 +1550,11 @@
       graph, router, signals, motion, congestion, core, settings, demand, scale,
       setDay(d) { settings.day = ((d % 7) + 7) % 7; },
       setCarShare(x) { settings.carShare = Math.max(0, Math.min(1, x)); },
+      setTransitReplaced(on) { settings.transitReplaced = !!on; },
+      setRebalance(on) { settings.rebalance = !!on && !!demand; if (settings.rebalance && !S.forecast.length) S.forecast = buildForecast(); },
+      setEv(on) { settings.ev = !!on; },
+      setDepotActive, addDepot, findIdle, rebalance, indexAvailable,
+      clearIndex() { idleIndex = null; },
       get parkingLots() { return parkingLots; },
       setEvents(list) { settings.events = list; },
       chokepoints: (top) => congestion.chokepoints(S.vehicles, top),

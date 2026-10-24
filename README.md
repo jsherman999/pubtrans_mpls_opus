@@ -54,9 +54,22 @@ dispatched from five parking-ramp depots to a day of trips built from the Census
 UMN students, errands, visitors and events, for any day of the week), with pooling and on-the-way
 ride sharing, private traffic and freeway through-traffic entering at the map edge, signals that
 discharge at lane capacity, congestion that routes and drivers avoid, police/fire closures and
-breakdowns. The Chokepoints panel tracks the river bridges, freeway ramps and map-edge entries. Drag, scroll or pinch the map; tap a vehicle to
+breakdowns. The Chokepoints panel tracks the river bridges, freeway ramps and map-edge entries.
+Scenario controls set how many of today's car trips stay cars, whether transit riders ride
+shuttles, pooling, the fleet by vehicle type, depots, battery-electric operation and rebalancing. Drag, scroll or pinch the map; tap a vehicle to
 see its riders and route (and follow it), or a place to see who is waiting. The panel (a bottom
 sheet on phones) has playback speed, fleet and demand controls, live metrics and an event log.
+
+## Fleet-size sweep
+
+```
+node tools/fleet_sweep.cjs --scales 0.4,0.8,1,1.2 --until 10:00 --target 15 --out data/fleet_sweep.json
+```
+
+Runs the same seeded morning with the fleet scaled by each factor and reports average and
+90th-percentile waits, riders still waiting and delivered, and run time; the smallest fleet that
+meets the target is the recommendation. Options: `--sampling 10|20`, `--day 0-6`,
+`--car-share 0-1`, `--seed`.
 
 ## Run locally
 
@@ -81,6 +94,7 @@ node tests/motion.test.cjs                             # vehicle motion, up to 3
 node tests/sim.test.cjs                                # engine on the real network
 node tests/congestion.test.cjs                         # capacity, congestion, AM peak
 node tests/demand.test.cjs                             # Census demand, daily totals, AM/PM shape
+node tests/fleet.test.cjs                              # scenario controls, fleet at scale, sweep
 node tests/page.test.cjs                               # simulation page, headless
 node tests/simulation.cjs                              # original grid app (slow, ~2 minutes)
 ```

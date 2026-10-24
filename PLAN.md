@@ -275,14 +275,53 @@ Split into four steps so each lands green on its own.
   7,600 vehicles) is fully busy by 08:00 and waits grow to 15+ minutes: sizing it is Phase 6.
   Desktop Chrome at 08:15: about 22 ms of simulation per 20× frame (33 ms with drawing).
 
-### Phase 6 — SDEV scenario and fleet at scale
-- Controls: share of remaining private vehicles, transit replaced (on/off), pooling level,
-  fleet size by vehicle type (4-seat, 8-seat, 20-seat), depots.
-- Dispatch scaling: spatial hash for nearest-vehicle search, bounded candidate sets, idle
-  rebalancing toward forecast demand.
-- Optional EV state: battery, charging at depots, charge-time penalty.
-- Exit: a full AM peak at 1:20 runs at ≥ 10× on desktop; fleet-size sweep finds the size that
-  meets a target average wait.
+### Phase 6 — SDEV scenario and fleet at scale ✅
+- Scenario controls (page and engine): **car trips kept** (Phase 5), **today's transit riders
+  ride shuttles** on/off (off: they are counted as transit, not simulated), **pooling** 0–100 %
+  (0: one rider per trip; otherwise riders from the same area to the same area share, areas
+  pooling% × 6 m = 600 m at 100 %, plus on-the-way pickups up to pooling% × 4 m of detour),
+  fleet size by type (4-, 8-, 20-seat steppers in real vehicles), **depots** (switch each open
+  or closed, open a new one at any place; kept across Reset day; the last cannot close),
+  **electric fleet** on/off, **rebalancing** on/off.
+- Pooling by area at both ends: pooling only by destination (the source's rule) made shuttles
+  tour pickups kilometres apart and pushed waits past 30 minutes on the real map.
+- Dispatch scaling: free vehicles indexed in a 400 m grid per type with ring search (same answer
+  as a full scan, tested); request-driven ride sharing — the eight oldest waiting riders each
+  ask the four nearest moving shuttles or buses — plus two vehicles in turn scanning the queue;
+  dispatch checks legs with route-tree lengths instead of full searches; one en-route reroute
+  per step.
+- Rebalancing: every 5 minutes, idle vehicles move toward 800 m areas where the next 30 minutes
+  should bring more pickups than one idle vehicle per four. The forecast is another seeded
+  realisation of the day (what history would say), not the actual requests. With it, the
+  nearest free shuttle is 294 m from the riders of the next half hour at 06:45 (1,023 m
+  without). Idle vehicles wait 30 minutes before heading to a depot.
+- Electric fleet: battery and use per type (sedan 60 kWh, 0.18 kWh/km; shuttle 110 kWh,
+  0.32 kWh/km; bus 400 kWh, 1.3 kWh/km), charging at depots at 50/150/150 kW from below 25 %
+  to 80 %, no new riders below 15 %, full batteries each morning. Unlimited chargers per depot
+  for now. Morning service rarely needs a charge (fleet at 90 % by 10:00).
+- Fleet-size sweep: `node tools/fleet_sweep.cjs` (defaults: scales 0.3–1.6 of the default
+  fleet, 05:30–10:00, Wednesday, 1:20, 50 % of car trips kept, target 15 min average wait;
+  result in `data/fleet_sweep.json`):
+  | Fleet (real vehicles) | Average wait | Still waiting at 10:00 | Delivered |
+  |---|---|---|---|
+  | 5,700 | 37.8 min | 47,220 | 97,460 |
+  | 7,600 (the Phase 5 default) | 29.5 min | 31,500 | 106,860 |
+  | 11,400 | 20.0 min | 7,440 | 124,220 |
+  | 15,200 | 16.3 min | 1,180 | 130,120 |
+  | **19,000 (new default: 3,000 sedans, 13,000 shuttles, 3,000 buses)** | **13.5 min** | 40 | 133,060 |
+  | 22,800 | 12.7 min | 0 | 133,020 |
+  | 30,400 | 12.8 min | 0 | 127,860 |
+  Waits stop falling near 13 minutes: beyond about 20,000 vehicles the fleet itself congests the
+  streets (rides lengthen, deliveries drop at 30,400). An 8-minute average is not reachable in
+  this scenario; reaching it would take fewer cars kept, more 20-seat buses or better network
+  capacity (Phase 4's simplifications), not more vehicles.
+- Tests: `node tests/fleet.test.cjs` (grid search vs full scan, pooling on/off and compact pools,
+  transit and car-share levers, depots, battery use/charging/dispatch cut-off, rebalancing, AM
+  peak speed, a two-size sweep that picks the default).
+- **Exit:** AM peak 07:00–10:00 at 1:20 with the 19,000-vehicle fleet: 17.6 ms average (p95
+  21.5 ms) per 10 steps in Node; in desktop Chrome at 08:15, 16.8 ms of simulation per 10×
+  frame and 21 ms with drawing, a fifth of the 100 ms budget, so ≥ 10× holds with room (20× is
+  about 40 ms). The sweep finds the 15-minute fleet (19,000).
 
 ### Phase 7 — Buildings and Driver POV (`tools/build_buildings.py` → `data/mpls_buildings.js`)
 - OSM footprints with `height` / `building:levels`; simplified, clipped, quantized.
@@ -314,7 +353,8 @@ Split into four steps so each lands green on its own.
    for the "all transit replaced" scenario? (Plan assumes optional, off by default.)
 2. Default agent sampling ratio (1:20 assumed). **Decided in Phase 5:** 1:20 default, 1:10 selectable.
 3. Whether remaining private vehicles may use bus-only lanes (assumed no).
-4. Depot locations (assumed: a handful of existing parking ramps, configurable).
+4. Depot locations (assumed: a handful of existing parking ramps, configurable). **Phase 6:** five
+   ramps by default; open, close or add depots on the page.
 
 ## Progress log
 
@@ -329,4 +369,5 @@ Split into four steps so each lands green on its own.
 | 3d | done | `index.html` runs the ported engine (`src/sim.js`) on real streets; source app kept at `source/index.html`; map layer shared as `src/mapview.js`. Peak 476 vehicles on the road; 20× frame ≈ 12 ms sim in desktop Chrome. Phone timing still to measure on a device. |
 | 4 | done | Saturation flow, merge turns, keep-clear, pcu-4 private agents with real-scale demand, BPR + queue delay routing and en-route diversion, chokepoint panel and congestion layer. AM peak: 121-car queue at the I-35W UMN exits at 08:05, cleared by 10:00. ≈ 22 ms per 20× frame in desktop Chrome at the peak. |
 | 5 | done | Census 2020 blocks + LODES 2023 + OSM parking → 822 zones, 114k residents, 226k jobs; commuters, UMN, hospitals, errands, visitors, events by day of week; 721k trips on a Wednesday with 08–09 and 16–17 peaks; 1:20 agents; car-share lever, edge hubs, parking, green splits, gridlock relief. Downtown-residents target missed (35.7k Census vs 45k plan). |
-| 6–9 | not started | |
+| 6 | done | Scenario controls (transit, cars kept, pooling, fleet, depots, EV, rebalancing); grid dispatch and request-driven sharing; area pooling; rebalancing to a forecast; battery and charging; fleet sweep: 19,000 vehicles for a 13.5-min average wait (floor ≈ 13 min from congestion); 10× AM peak at ~21 ms/frame in desktop Chrome. |
+| 7–9 | not started | |

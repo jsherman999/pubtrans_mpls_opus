@@ -190,6 +190,8 @@
   <div class="row"><span>Queued behind traffic · at signals</span><span id="hTraffic" class="num">—</span></div>
   <div class="row"><span title="Street segments where congestion adds at least 6 s to the expected travel time">Congested segments · reroutes</span><span id="hCongestion" class="num">—</span></div>
   <div class="row"><span>Emergencies</span><span id="hEmergency" class="num">None</span></div>
+  <div class="row"><span title="Fleet vehicles charging or driving to charge, and those below 25 % charge">Charging · low battery</span><span id="hCharging" class="num">—</span></div>
+  <div class="row"><span title="Idle vehicles driving toward where riders are expected in the next half hour">Repositioning · moves today</span><span id="hRepos" class="num">—</span></div>
   <div class="row"><span title="Main-thread time per frame: simulation steps plus drawing">Frame time</span><span id="hPerf" class="num">—</span></div>
 
   <div class="chart"><div class="head"><span>Queue wait, minutes</span><b id="cWait" class="num">0.0</b></div>
@@ -231,10 +233,16 @@
   <div class="slider"><label for="privateTraffic" id="privateLabel">Private traffic</label><span id="privateVal" class="num"></span>
     <input type="range" id="privateTraffic" min="0" max="3" step="0.25"></div>
   <p class="hint" id="privateHint"></p>
-  <div class="slider"><label for="rideSharing">Ride sharing</label><span id="sharingVal" class="num"></span>
+  <div class="slider"><label for="rideSharing">Pooling</label><span id="sharingVal" class="num"></span>
     <input type="range" id="rideSharing" min="0" max="100" step="10"></div>
   <p class="hint" id="sharingHint"></p>
-  <p class="hint">Removing vehicles parks idle ones first; busy ones finish their riders, then leave. Demand is placeholder (random homes, jobs, schools, groceries and hubs on the street grid) until census and job data arrive.</p>
+  <label class="row" style="justify-content:flex-start;gap:8px" id="transitRow" hidden><input type="checkbox" id="transitReplaced" checked> Today's transit riders ride shuttles</label>
+  <label class="row" style="justify-content:flex-start;gap:8px" id="rebalanceRow" hidden><input type="checkbox" id="rebalance" checked> Move idle vehicles toward expected riders</label>
+  <label class="row" style="justify-content:flex-start;gap:8px"><input type="checkbox" id="ev" checked> Electric fleet (range, charging at depots)</label>
+  <h3 style="font-size:12.5px;margin:10px 0 4px">Depots</h3>
+  <div id="depotList"></div>
+  <p class="hint">Close a depot and its vehicles move to the nearest open one. Tap a place on the map to open a depot there.</p>
+  <p class="hint" id="fleetHint">Removing vehicles parks idle ones first; busy ones finish their riders, then leave. Demand is placeholder (random homes, jobs, schools, groceries and hubs on the street grid) because data/mpls_demand.js is missing.</p>
 
   <h2>Event log</h2>
   <div class="btns"><button id="logPause" aria-pressed="false">Pause log</button></div>
@@ -270,6 +278,7 @@
   <h3 id="infoTitle"></h3>
   <dl id="infoList"></dl>
   <div class="btns" id="infoButtons"><button id="follow" aria-pressed="false">Follow</button></div>
+  <div class="btns" id="placeButtons" hidden><button id="openDepot">Open a depot here</button></div>
 </section>
 <div id="credit">Street and parking data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · Census data: U.S. Census Bureau</div>
 <div id="empty"><div><h1>No street data</h1><p>Run <code>python3 tools/build_osm.py --fetch</code>, then reload.</p></div></div>
@@ -301,6 +310,7 @@ const STATE_TEXT = {
   private_in: "Driving to destination", private_parked: "Parked", private_out: "Leaving the area", private_through: "Freeway through-trip",
   emergency_outbound: "Responding", emergency_scene: "On scene", emergency_return: "Returning to base",
   emergency_wait: "Waiting for a route", emergency_return_wait: "Waiting for a route",
+  repositioning: "Moving toward expected riders", to_charge: "Driving to charge", charging: "Charging at the depot",
   recovery_outbound: "Driving to a breakdown", recovery_outbound_wait: "Waiting for a route", recovery_wait: "Waiting for a route",
 };
 const LOG_COLOR = { REQUEST: "muted", DISPATCH: "sedan", POOL: "shuttle", PICKUP: "go", DROPOFF: "employer", EMERGENCY: "fire",
@@ -414,8 +424,10 @@ function start(graph) {
     for (const d of [...S.depots, S.base]) {
       const x = sx(d.x), y = sy(d.y), r = s < 0.3 ? 7 : 9;
       ctx.fillStyle = d === S.base ? theme.fire : theme.depot;
+      ctx.globalAlpha = d.active === false ? 0.35 : 1;
       ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - r, y - r, r * 2, r * 2, 3) : ctx.rect(x - r, y - r, r * 2, r * 2); ctx.fill();
       ctx.fillStyle = theme.bg; ctx.fillText(d === S.base ? "+" : "P", x, y + 0.5);
+      ctx.globalAlpha = 1;
       const n = depotParked.get(d.node);
       if (n && d !== S.base) badge(ctx, x + r + 10, y - r, (n * K).toLocaleString(), theme.depot);
     }
@@ -587,16 +599,19 @@ function start(graph) {
       }
       rows.push(["Driven today", `${(v.odo / 1609.344).toFixed(1)} mi`]);
       $("infoButtons").hidden = false;
+      $("placeButtons").hidden = true;
+      if (v.battery) rows.push(["Battery", `${Math.round(100 * v.kwh / v.battery)} % (${Math.round(v.kwh)} of ${v.battery} kWh)`]);
     } else {
       $("infoTitle").textContent = v.name;
       const n = waitingAt().get(v.node) || 0;
-      rows.push(["Type", PLACE_TYPE[v.type] || (v.kind === "depot" ? "Fleet depot (approximate location)" : "Police and fire base (approximate location)")]);
+      rows.push(["Type", PLACE_TYPE[v.type] || (v.kind === "depot" ? (v.added ? "Fleet depot" : "Fleet depot (approximate location)") : "Police and fire base (approximate location)")]);
       if (v.hub) rows.push(["Serves", "Riders arriving from and leaving for outside the area"]);
       if (v.units) rows.push(["Homes", v.units.toLocaleString()]);
       if (v.zones) rows.push(["Residents · jobs", `${v.pop.toLocaleString()} · ${v.jobs.toLocaleString()}`]);
       rows.push(["Riders waiting", (n * K).toLocaleString()]);
       if (v.kind === "depot") rows.push(["Parked vehicles", String(sim.state.vehicles.filter((x) => x.lane < 0 && x.state === "idle" && x.node === v.node).length * K)]);
       $("infoButtons").hidden = true;
+      $("placeButtons").hidden = v.kind === "depot" || v.kind === "base";
     }
     const dl = $("infoList");
     dl.replaceChildren();
@@ -629,7 +644,7 @@ function start(graph) {
   $("pauseMap").addEventListener("click", () => setPaused(!paused));
   $("fit").addEventListener("click", () => { follow = false; $("follow").setAttribute("aria-pressed", "false"); map.fit(); });
   $("speed").addEventListener("input", (e) => { speed = Number(e.target.value); $("speedVal").textContent = speed + "×"; });
-  $("reset").addEventListener("click", () => { sim.reset(); select(null); logShown = 0; $("log").replaceChildren(); refresh(); });
+  $("reset").addEventListener("click", () => { sim.reset(); select(null); logShown = 0; $("log").replaceChildren(); renderDepots(); refresh(); });
   $("emergency").addEventListener("click", () => { sim.triggerEmergency(); setPaused(false); refresh(); });
   for (const btn of document.querySelectorAll("[data-step]")) {
     btn.addEventListener("click", () => {
@@ -644,6 +659,38 @@ function start(graph) {
   $("privateTraffic").addEventListener("input", (e) => { sim.setPrivateTraffic(Number(e.target.value)); refresh(); });
   $("congestionLayer").addEventListener("change", (e) => { showCongestion = e.target.checked; map.requestDraw(); });
   $("rideSharing").addEventListener("input", (e) => { sim.setRideSharing(Number(e.target.value)); refresh(); });
+  $("ev").checked = sim.settings.ev;
+  $("ev").addEventListener("change", (e) => { sim.setEv(e.target.checked); refresh(); });
+  if (sim.demand) {
+    $("fleetHint").textContent = "Removing vehicles parks idle ones first; busy ones finish their riders, then leave. The default fleet " +
+      "is the smallest that keeps the average wait under 15 minutes through the morning rush (tools/fleet_sweep.cjs).";
+    $("transitRow").hidden = false; $("rebalanceRow").hidden = false;
+    $("transitReplaced").checked = sim.settings.transitReplaced;
+    $("rebalance").checked = sim.settings.rebalance;
+    $("transitReplaced").addEventListener("change", (e) => { sim.setTransitReplaced(e.target.checked); refresh(); });
+    $("rebalance").addEventListener("change", (e) => { sim.setRebalance(e.target.checked); refresh(); });
+  }
+  $("openDepot").addEventListener("click", () => {
+    if (!selected || selected.kind) return;
+    const d = sim.addDepot(selected.node, `Depot · ${selected.name.split(" · ").pop()}`);
+    if (d) { renderDepots(); select(d); }
+  });
+  // Depot list with open/closed switches (the last open depot cannot close).
+  function renderDepots() {
+    const box = $("depotList");
+    box.replaceChildren();
+    sim.state.depots.forEach((d, i) => {
+      const label = document.createElement("label");
+      label.className = "row"; label.style.justifyContent = "flex-start"; label.style.gap = "8px";
+      const cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = d.active;
+      cb.addEventListener("change", (e) => { if (!sim.setDepotActive(i, e.target.checked)) e.target.checked = true; map.requestDraw(); });
+      const name = document.createElement("span"); name.textContent = d.name;
+      label.append(cb, name);
+      box.append(label);
+    });
+  }
+  renderDepots();
   $("logPause").addEventListener("click", () => { logPaused = !logPaused; $("logPause").setAttribute("aria-pressed", String(logPaused)); $("logPause").textContent = logPaused ? "Resume log" : "Pause log"; });
   $("sheetToggle").addEventListener("click", () => {
     const open = panel.classList.toggle("open");
@@ -674,6 +721,9 @@ function start(graph) {
     $("hPrivate").textContent = `${c.privateCars.toLocaleString()} (${c.through} through)`;
     $("hCongestion").textContent = `${sim.congestion.congestedArcs} · ${S.reroutes}`;
     $("hTraffic").textContent = `${c.queued} · ${c.atSignal}`;
+    $("hCharging").textContent = sim.settings.ev ? `${(c.charging * K).toLocaleString()} · ${(c.lowBattery * K).toLocaleString()}` +
+      (c.soc != null ? ` (fleet ${Math.round(c.soc * 100)} % charged)` : "") : "off";
+    $("hRepos").textContent = sim.settings.rebalance ? `${(c.repositioning * K).toLocaleString()} · ${(S.repositions * K).toLocaleString()}` : "off";
     $("hEmergency").textContent = S.incidents.length ? S.incidents.map((i) => `${i.kind} at ${i.target.name}`).join("; ") : "None";
     $("sPop").textContent = sim.settings.population.toLocaleString();
     $("sSedan").textContent = (sim.countFleet("sedan") * K).toLocaleString();
@@ -693,7 +743,8 @@ function start(graph) {
     renderChokepoints();
     $("sharingVal").textContent = sim.settings.rideSharing + "%";
     $("sharingHint").textContent = sim.settings.rideSharing
-      ? `Shuttles and buses add waiting riders along their way, up to ${4 * sim.settings.rideSharing} m of extra driving per trip; existing stops keep their order.`
+      ? `Riders from the same ${6 * sim.settings.rideSharing} m area to the same area share a vehicle, and shuttles and buses pick up waiting riders along their way, ` +
+        `up to ${4 * sim.settings.rideSharing} m of extra driving per trip; existing stops keep their order.`
       : "Off: trips are fixed when dispatched.";
     // Log, newest first.
     if (!logPaused) {

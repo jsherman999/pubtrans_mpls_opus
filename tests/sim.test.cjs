@@ -142,8 +142,12 @@ function trackRequests(sim, all) {
   sim.dispatch();
   const sedan = S.vehicles.find((v) => v.pickupQueue.includes(carpool[0]));
   assert.ok(sedan && sedan.kind === "sedan" && carpool.every((r) => sedan.pickupQueue.includes(r)), "sedan carpool");
-  // Same destination, different pickups: a shuttle pool, pickups before dropoffs.
-  const pool = [1, 2, 3, 4, 5].map((i) => sim.addRequest(home[i], work[1]));
+  // Different pickups in one 600 m area, one destination: a shuttle pool, pickups before dropoffs.
+  const cells = new Map();
+  for (const p of S.places) { const k = `${Math.floor(p.x / 600)},${Math.floor(p.y / 600)}`; if (!cells.has(k)) cells.set(k, []); cells.get(k).push(p); }
+  const area = [...cells.values()].sort((a, b) => b.length - a.length)[0].filter((p) => p !== work[1]);
+  assert.ok(area.length >= 3, "an area with several places");
+  const pool = area.slice(0, 5).map((p) => sim.addRequest(p, work[1]));
   sim.dispatch();
   const shuttle = S.vehicles.find((v) => v.pickupQueue.includes(pool[0]));
   assert.ok(shuttle && shuttle.kind === "shuttle" && pool.every((r) => shuttle.pickupQueue.includes(r)), "shuttle pool");
@@ -164,10 +168,11 @@ function trackRequests(sim, all) {
   assert.ok(idleSedans.every((v) => d(v) >= d(car) - 1e-9), "nearest idle sedan");
   assert.strictEqual(S.queue.length, 0);
   // Everyone is delivered.
-  for (let i = 0; i < 1200 && S.completed < 27; i++) sim.step();
-  assert.strictEqual(S.completed, 27, `all 27 riders delivered (${S.completed})`);
+  const total = 3 + pool.length + 18 + 1;
+  for (let i = 0; i < 1200 && S.completed < total; i++) sim.step();
+  assert.strictEqual(S.completed, total, `all ${total} riders delivered (${S.completed})`);
   assertClean(sim);
-  console.log("PASS: sedan carpool, shuttle pool (pickups first), bus sweep of an 18-rider backlog, nearest idle sedan; all 27 delivered.");
+  console.log(`PASS: sedan carpool, shuttle pool from one area (pickups first), bus sweep of an 18-rider backlog, nearest idle sedan; all ${total} delivered.`);
 }
 
 // ------------------------------------------------------------ ride sharing: insertion, capacity, budget, stop order
