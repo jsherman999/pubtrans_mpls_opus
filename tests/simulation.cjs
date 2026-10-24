@@ -1,7 +1,7 @@
 const {readFileSync}=require('node:fs');
 const vm=require('node:vm');
 const assert=require('node:assert/strict');
-const source=readFileSync(new URL('../index.html',`file://${__filename}`),'utf8').split('<script>')[1].split('</script>')[0];
+const source=readFileSync(new URL('../source/index.html',`file://${__filename}`),'utf8').split('<script>')[1].split('</script>')[0];
 function boot(seed) {
  const math=Object.create(Math);
  if(seed!=null)math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
@@ -366,7 +366,7 @@ console.log('PASS: track-aligned Park & Ride clear of both tracks and its access
    cars[0].pickupQueue.push({requestedAt:simElapsed-7},{requestedAt:simElapsed-9,pickedUpAt:simElapsed-1});`);
  assert.equal(run('currentQueueWaitMinutes()'),5);
  assert.equal(elements.get('dbg-pop-inline').click,run('openDebugWindow'));
- const html=readFileSync(new URL('../index.html',`file://${__filename}`),'utf8');
+ const html=readFileSync(new URL('../source/index.html',`file://${__filename}`),'utf8');
  const nav=html.match(/<nav class="map-nav"[^>]*>(.*?)<\/nav>/)[1];
  assert.deepEqual([...nav.matchAll(/href="#([^"]+)"/g)].map(m=>m[1]),['region-card','center-card','controls']);
  const guide=html.slice(html.indexOf('<div class="guide-body">'));

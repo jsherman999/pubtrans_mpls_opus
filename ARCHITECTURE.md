@@ -1,5 +1,10 @@
 # Architecture and source adaptation
 
+> This document describes the **original grid app**, now kept unchanged at `source/index.html`.
+> The real-street port lives in `src/` (`graph.js`, `routing.js`, `traffic.js`, `motion.js`,
+> `sim.js`, `mapview.js`) and `index.html`; see PLAN.md Phase 3 for how each source mechanism
+> maps onto it. This file is rewritten in Phase 9.
+
 ## Original behavior
 
 The source is a single HTML document: CSS and controls, graph/building data, schedule-driven population, dispatch, vehicle state machines, interactive planning, top-down rendering, perspective rendering, metrics, and startup.

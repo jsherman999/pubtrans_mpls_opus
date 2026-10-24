@@ -15,6 +15,8 @@
 //   node         node the vehicle is parked at while off the road
 //   hold         seconds left of a stop-sign hold; cleared marks the hold as served
 //   speedFactor  optional multiplier on posted speed (default 1)
+//   passTag      closure tag this vehicle may drive through (responders at their own incident)
+//   lastArc      arc the vehicle arrived on (set on arrival); odo, meters driven
 //   waiting      why the vehicle stopped short this step: "queue", "signal", "stop",
 //                "closed", or null if it used the whole step (or arrived)
 (function (root) {
@@ -43,7 +45,7 @@
     }
     const lanes = new Array(A);              // lanes[arc][k] = vehicles, front first; lazily built
     const occupancy = new Int32Array(A);     // vehicles on each arc, all lanes
-    const closed = new Uint8Array(A);
+    const closed = new Int32Array(A);        // 0 open, else the closure's tag (see setClosed)
     const nflags = graph.nodes.flags;
     let stamp = 0;
 
@@ -138,7 +140,7 @@
       let acc = 0;
       for (let j = v.ri + 1; j < v.route.length; j++) {
         const a = v.route[j];
-        if (closed[a]) return acc;
+        if (blocked(v, a)) return acc;
         const room = entryRoom(a);
         if (room !== Infinity) return acc + room;
         acc += len[a];
@@ -160,8 +162,8 @@
       // Parked at a node: join the first arc when it has room.
       if (v.lane < 0) {
         const a = v.route[0];
-        const room = closed[a] ? -1 : entryRoom(a);
-        if (room < 0) { v.waiting = closed[a] ? "closed" : "queue"; return done(v); }
+        const room = blocked(v, a) ? -1 : entryRoom(a);
+        if (room < 0) { v.waiting = blocked(v, a) ? "closed" : "queue"; return done(v); }
         enter(v, a, pickLane);
         v.ri = 0;
       }
@@ -177,6 +179,7 @@
         if (lim > v.s) {
           const travel = Math.min(lim - v.s, remaining * speed);
           v.s += travel;
+          v.odo = (v.odo || 0) + travel;
           remaining -= travel / speed;
         }
         if (v.s < L - 1e-6) {
@@ -186,6 +189,7 @@
         v.s = L;
         if (v.ri === v.route.length - 1) {            // arrived: pull over at the node
           v.node = arcs[a].to;
+          v.lastArc = a;
           leaveLane(v);
           v.route = null; v.ri = 0;
           arrivals.push(v);
@@ -201,7 +205,7 @@
           if (remaining <= EPS) break;
         }
         const next = v.route[v.ri + 1];
-        if (closed[next]) { v.waiting = "closed"; break; }
+        if (blocked(v, next)) { v.waiting = "closed"; break; }
         const room = entryRoom(next);
         if (room < 0) { v.waiting = "queue"; break; }
         const lane = pickLane;
@@ -229,7 +233,10 @@
       return out;
     }
 
-    function setClosed(a, value) { closed[a] = value ? 1 : 0; }
+    // Close an arc to traffic (value true, or a positive tag) or reopen it (false / 0). Vehicles
+    // whose passTag equals the tag may still use it.
+    function setClosed(a, value) { closed[a] = value === true ? -1 : value ? value : 0; }
+    function blocked(v, a) { return closed[a] !== 0 && closed[a] !== v.passTag; }
 
     // World position and heading of a vehicle. Lanes are offset to the right of travel, so
     // opposing traffic and side-by-side lanes do not draw on top of each other.

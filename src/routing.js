@@ -121,7 +121,8 @@
       if (++stamp === 0xffffffff) { seenStamp.fill(0); doneStamp.fill(0); stamp = 1; }
       stats.searches++;
       const tx = nx[to], ty = ny[to];
-      const h = useH ? (v) => Math.hypot(nx[v] - tx, ny[v] - ty) * invMax : () => 0;
+      // Math.sqrt, not Math.hypot: this runs for every node reached and hypot is much slower.
+      const h = useH ? (v) => { const dx = nx[v] - tx, dy = ny[v] - ty; return Math.sqrt(dx * dx + dy * dy) * invMax; } : () => 0;
 
       heap.clear();
       dist[from] = 0; prev[from] = -1; seenStamp[from] = stamp;
@@ -272,6 +273,58 @@
       return best;
     }
 
+    // Fastest routes from every node to `to` in one backward Dijkstra. Per node: `length` (m) of
+    // that route (Infinity where `to` cannot be reached) and `next`, the first arc to take (-1 at
+    // `to` and where unreachable); pathTo() follows it. Same rules as search(): mode, no passing
+    // through portals, no bans or extra costs. One tree answers every trip into a busy stop
+    // (ride-sharing detours, dispatch legs) instead of hundreds of point-to-point searches.
+    let inStart = null, inArcs = null;
+    function treeTo(to, o = {}) {
+      const mode = o.mode || MODE_GENERAL;
+      if (!inStart) {
+        inStart = new Int32Array(N + 1);
+        for (let i = 0; i < A; i++) inStart[arcTo[i] + 1]++;
+        for (let v = 0; v < N; v++) inStart[v + 1] += inStart[v];
+        inArcs = new Int32Array(A);
+        const fill = inStart.slice(0, N);
+        for (let i = 0; i < A; i++) inArcs[fill[arcTo[i]]++] = i;
+      }
+      const time = new Float64Array(N).fill(Infinity), length = new Float32Array(N).fill(Infinity);
+      const next = new Int32Array(N).fill(-1);
+      const done = new Uint8Array(N);
+      heap.clear();
+      time[to] = 0; length[to] = 0;
+      heap.push(to, 0);
+      while (heap.n) {
+        const v = heap.pop();
+        if (done[v]) continue;
+        done[v] = 1;
+        if (v !== to && (nflags[v] & NODE_PORTAL)) continue;   // a portal may start a route, not pass one
+        const tv = time[v];
+        for (let k = inStart[v], end = inStart[v + 1]; k < end; k++) {
+          const i = inArcs[k];
+          if (arcPsvOnly[i] && mode !== MODE_PSV) continue;
+          const u = arcFrom[i], nt = tv + arcTime[i];
+          if (nt < time[u]) { time[u] = nt; length[u] = length[v] + arcLen[i]; next[u] = i; heap.push(u, nt); }
+        }
+      }
+      stats.trees = (stats.trees || 0) + 1;
+      return { to, mode, length, next };
+    }
+    // Route from `from` along a treeTo() tree, in the same shape as search() results.
+    function pathTo(tree, from) {
+      if (from === tree.to) return { from, to: tree.to, arcs: [], time: 0, length: 0 };
+      if (tree.next[from] < 0) return null;
+      const path = [];
+      let time = 0, length = 0;
+      for (let v = from; v !== tree.to;) {
+        const i = tree.next[v];
+        path.push(i); time += arcTime[i]; length += arcLen[i];
+        v = arcTo[i];
+      }
+      return { from, to: tree.to, arcs: path, time, length };
+    }
+
     // The connected core: the largest set of non-portal nodes that can all reach one another
     // without leaving the map (routes never pass through portals). In the real data about 5 %
     // of intersections are reachable only by driving off the map and back in, so trips should
@@ -322,7 +375,7 @@
 
     return {
       arcs, arcCount: A, maxSpeedMps: maxMps,
-      route, search, kShortest, invalidate, routePoints, nearestNode, connectedCore,
+      route, search, kShortest, invalidate, routePoints, nearestNode, connectedCore, treeTo, pathTo,
       get epoch() { return epoch; },
       stats,
     };

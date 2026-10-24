@@ -127,6 +127,7 @@ function runViewer({ withRealData }) {
   vm.createContext(sandbox);
   vm.runInContext(read("src/graph.js"), sandbox);
   vm.runInContext(read("src/routing.js"), sandbox);
+  vm.runInContext(read("src/mapview.js"), sandbox);
   vm.runInContext(inline, sandbox);
   const flush = () => { while (rafQueue.length) rafQueue.shift()(); };
   return new Promise((resolve) => setTimeout(() => { flush(); resolve({ sandbox, els, calls, flush, errors }); }, 20));

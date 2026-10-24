@@ -128,15 +128,55 @@ Split into four steps so each lands green on its own.
   queue wait over 2 minutes (no gridlock).
 - Result: 0.08 ms per 3 s step for 400 vehicles and 0.6 ms for 3,400 on desktop Node.
 
-**3d — Engine integration (`index.html` → real graph)**
-- Replace grid assumptions: `GRID_N`, `nodeColRow`, `nodeId(c,r)`, `BUILDINGS{col,row}`, the
-  generated suburbs/cul-de-sacs, Juniper Park & Ride and the 100 m block constants.
-- Dispatch, pooling, ride sharing, emergencies and metrics call 3a/3c instead of the grid code.
-- One map view (Phase 2) replaces the seven fixed views; vehicle picking inverts its transform.
-- Depots at real parking ramps / surface lots (configurable list of nodes). Placeholder demand
-  (random street nodes) until Phase 5.
-- Port `tests/simulation.cjs` invariants to the real graph (legal moves only, capacity, completion).
-- Exit: 300+ vehicles run at 20× on a mid-range phone; no illegal moves in the regression run.
+**3d — Engine integration (`index.html` → real graph) ✅**
+- The source app moved unchanged to `source/index.html` (its regression suite still runs against
+  it); `index.html` is now the simulation on real streets. The engine is a DOM-free module,
+  `src/sim.js`, seeded (no `Math.random`), so the page, the tests and later headless runs share it.
+- Grid assumptions replaced: no `GRID_N`/`nodeColRow`/`nodeId(c,r)`/`BUILDINGS{col,row}`,
+  suburbs, cul-de-sacs, Juniper Park & Ride or 100 m blocks. Routes are router arcs, movement is
+  `src/motion.js`, signals are `src/traffic.js`.
+- Ported: 3-second steps with playback repeating whole steps; 07:30 start and day rollover;
+  worker/student/errand/commuter schedules; request queue; dispatch phases (origin sweeps under
+  backlog, sedan carpools, same-destination pools, singles) with the nearest idle vehicle instead
+  of the first; multi-stop trips with one rider boarding per step; idle return to the nearest
+  depot; on-the-way ride sharing (≤ 400 m extra per trip at 100 %, stop order and per-stop budget
+  kept, capacity over the whole itinerary, four vehicles per step); police/fire incidents that
+  close the responder's arrival direction (5/10 min) with detours for everyone else; vehicle
+  trouble with a recovery vehicle that keeps riders' boarding times; private traffic; live fleet
+  and population changes with retiring vehicles; passenger metrics as in the source.
+- Real-network specifics: trips start and end only in the connected core (3c); private visitors
+  enter at a portal, park at a place, then leave through a portal; freeway through-traffic runs
+  edge to edge on the 48 freeway entry→exit routes. Fleet vehicles may use shuttle-only streets,
+  private cars may not.
+- Placeholder demand: 130 seeded places on curbside street nodes (homes weighted by units,
+  employers, schools, groceries, transit hubs), 2,500 people. Depots at five approximate parking
+  ramps (ABC, Leamington, Downtown East, UMN West Bank, UMN East Bank); police/fire base near
+  City Hall. Phase 5 replaces the places with census/LODES zones.
+- Routing at scale: one backward route tree per stop (`router.treeTo`/`pathTo`, built on first
+  use) answers every trip into a place, depot, base or exit portal, and ride-sharing leg lengths
+  come from the same trees with straight-line branch-and-bound, so the AM peak runs about 2 % of
+  the point-to-point searches it would otherwise need.
+- Map: the viewer's canvas code is now `src/mapview.js`, shared by `viewer.html` and
+  `index.html`. One map view with vehicles (dots zoomed out, to-scale shapes in their lanes up
+  close, private traffic drawn beneath the fleet), per-approach signal heads, closures, places
+  with waiting counts, depots with parked counts; tap a vehicle (route, stops, riders, follow) or
+  a place. Wide screens get a side panel, phones a bottom sheet; the map fits clear of both.
+- Not ported (later phases or dropped): Driver POV, building designs and the seven views
+  (Phase 7); rail (open decision 1); interactive trip planning, narration and scripted
+  obstacles; neighborhood-dedicated buses (buses now take sweeps and large pools); the
+  claim-count "gridlock" score and claim-weighted routing (Phase 4 adds volume/capacity delay);
+  stadium/event surges (Phase 5).
+- Tests: `node tests/sim.test.cjs` (placement in the core, a 2.5 h seeded regression run with
+  audits of legality, gaps, capacity and a ledger that every rider is in exactly one place,
+  determinism at 1× vs 20× and across reset, dispatch phases, ride sharing, emergencies,
+  breakdown recovery, private and through traffic, live fleet changes) and
+  `node tests/page.test.cjs` (the page headless: fits a phone, 20× frames, picking, follow,
+  every control).
+- Result: peak 476 vehicles on the road (≈ 860 in the simulation including parked visitors).
+  One 20× frame (20 steps) of simulation: 4.4 ms average over the AM peak in Node and 12 ms
+  median in desktop Chrome with drawing about 1–2 ms more (Apple-silicon desktop). Not yet timed
+  on a phone: at a typical 4–5× slower mid-range phone that is roughly 50–70 ms of the 100 ms
+  frame, so the exit target looks reachable but is unverified.
 
 ### Phase 4 — Capacity and congestion
 - Per-link capacity from lanes × class saturation flow; queues spill back across links; signal
@@ -208,4 +248,5 @@ Split into four steps so each lands green on its own.
 | 3a | done | Router + viewer route preview; A* 0.46 ms/route on a 7,000-node grid (0.12 ms on the real network). |
 | 3b | done | Signal timing and stop-sign holds. |
 | 3c | done | `src/motion.js`: lanes, 8 m following across links, signals, stop signs, closures; connected core. 400 vehicles 0.08 ms/step. |
-| 3d–9 | not started | |
+| 3d | done | `index.html` runs the ported engine (`src/sim.js`) on real streets; source app kept at `source/index.html`; map layer shared as `src/mapview.js`. Peak 476 vehicles on the road; 20× frame ≈ 12 ms sim in desktop Chrome. Phone timing still to measure on a device. |
+| 4–9 | not started | |
