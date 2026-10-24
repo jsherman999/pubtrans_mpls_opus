@@ -241,7 +241,7 @@ assert.strictEqual(els.clock.textContent, "05:30");
 assert.strictEqual(els.day.children.length, 7);
 assert.strictEqual(els.day.value, "2", "Wednesday");
 assert.strictEqual(els.event.value, "1", "Twins game tonight");
-assert.match(els.dPeople.textContent, /^114,464 · 19\d,\d{3}$/);
+assert.match(els.dPeople.textContent, /^114,464 · 18\d,\d{3}$/);
 assert.match(els.dTrips.textContent, /^\d+k · \d+k · \d+k$/);
 els.speed.fire("input", { target: { value: "20" } });
 for (let i = 0; i < 150; i++) frame();          // 05:30 to 08:00
@@ -265,6 +265,13 @@ els.carShare.fire("input", { target: { value: "10" } });
 assert.strictEqual(sim.settings.carShare, 0.1);
 assert.notStrictEqual(els.dTrips.textContent, before);
 assert.match(els.carShareHint.textContent, /^10 % of the trips made by car today are still driven/);
+// Errands and visitors off: a surge-only day (the day restarts).
+const withErrands = sim.state.plan.byPurpose.errand;
+assert.ok(withErrands > 0 && els.background.checked === true);
+els.background.fire("change", { target: { checked: false } });
+assert.ok(!sim.state.plan.byPurpose.errand && !sim.state.plan.byPurpose.visit, "no errands or visitors");
+els.background.fire("change", { target: { checked: true } });
+assert.ok(sim.state.plan.byPurpose.errand > 0);
 // Plan chart hover readout.
 els.chartPlan.fire("pointermove", { offsetX: 8.5 * (300 / 24) });
 assert.match(els.planTip.textContent, /^08:00–09:00 · [\d,]+ by shuttle · [\d,]+ by car · [\d,]+ on foot$/);

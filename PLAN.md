@@ -416,6 +416,73 @@ Split into four steps so each lands green on its own.
   https://jsherman999.github.io/pubtrans_mpls_opus/.
 - **Exit:** all suites pass; the pages load without console errors in desktop and phone Chrome.
 
+### Phase 10 — Demand calibrated to public counts ✅
+Phase 5 counted every trip over 800 m that was not driven as a transit trip (no walking, cycling
+or carpooling beyond 800 m) and kept LODES's habit of filing a whole employer under one block.
+On a Wednesday it produced 372,000 transit trips touching the area, 533,000 SDEV requests with
+half of the car trips moved (69,000 in the 8:00 hour, 19,800 in the busiest 15 minutes), and up to
+4,600 arrivals in 15 minutes at a single East Bank block. The counts below say that is 3–10×
+too much.
+- Benchmarks (pulled October 2026):
+  | Figure | Value | Source |
+  |---|---|---|
+  | Metro Transit boardings in the study area, weekday | ≈ 66,600 (transfers included, suburban express not) | Met Council transit stop counts, fall 2025 |
+  | Downtown boardings / alightings, weekday | ≈ 32,500 / 32,200 | same |
+  | Commute modes to Minneapolis jobs | 72 % drive alone, 9 % carpool, 10 % transit, 5 % walk, 2 % bike; 16 % work from home | ACS 2024 1-year, B08601 |
+  | Arrival at Minneapolis workplaces | 30 % in 07:30–08:30, 51 % in 07:00–09:00 | ACS 2024, B08602 |
+  | Downtown office presence | 70–75 % of pre-pandemic workers, Tuesday–Thursday | Minneapolis Downtown Council, 2025 |
+  | Largest downtown employers | Hennepin Healthcare 7,500; Target 7,100; Hennepin County 6,200; Wells Fargo 5,500 | Downtown Council, 2024 |
+  | UMN Twin Cities | 57,900 enrolled, ~55,000 in person, ~7,000 on campus; students and staff 44 % drive, 26 % transit or campus bus, 22 % walk, 8 % bike; Campus Connector ~5,000 riders a weekday | UMN, Parking & Transportation Services 2022–2025 |
+  | UMN class grid | 50-min classes 08:00, 09:05, 10:10 … (Mon/Wed/Fri); 75-min 08:15, 09:45, 11:15 … (Tue/Thu) | classroom.umn.edu |
+  | Event crowds | Twins 2025 average 22,100, ~20–25 % by transit; Vikings ~66,000, ~25 % by light rail | MLB, Metro Transit |
+  | Ride-hail scale | Chicago: ~250,000 TNC trips a weekday citywide; ~20,800 into the Loop, peak ~1,900 an hour | City of Chicago open data, Oct 2025 |
+  | LODES lumping | 24,548 education jobs in one UMN block; top 20 blocks hold 47 % of the area's jobs | LODES 8 WAC |
+- **Jobs spread over floor space** (`tools/build_demand.py`, needs `data/mpls_buildings.js`): a
+  block with ≥ 1,500 jobs and < 15 m² of non-residential floor space per job keeps what its
+  floor space holds and passes the rest, with their commuters, to blocks within 400 m (campus
+  blocks for the campus) by spare floor space at 25 m² per job. 14 blocks spread; UMN's 25,375
+  jobs now sit across the campus (6,034 left in the original block); totals unchanged.
+- **Today's modes** (`src/demand.js`, `modes`): commuters from outside drive or carpool, walk or
+  cycle 5 %, and ride transit by job type (office 16 %, education 12 %, health 10 %, other 8 %);
+  residents' trips inside the area are walked or cycled 75 % at 800 m falling to 26 % beyond 4 km,
+  and 35 % of the rest ride transit; students from outside 45 % transit, 15 % walk or cycle;
+  students near campus mostly walk; visitors 15 % transit; event crowds 22 % transit, 10 % of
+  the crowd from inside the area. Office presence Tuesday–Wednesday 72 % (was 80 %), UMN staff
+  85 %; office arrivals spread wider (σ 65 min).
+- **Surges timed to the schedule:** students leave for their first class on the day's UMN grid
+  (earlier classes more likely), go home after one to three classes; 4 % change banks in each
+  passing period, a third of them by shuttle (most walk the Washington Avenue Bridge). Event
+  crowds clear over about 45 minutes.
+- **Levers:** car trips kept defaults to 90 % (was 50 %); errands and visitors can be switched
+  off for a surge-only day (`background`, page checkbox); Twins attendance 22,000.
+- **Result** (Wednesday): 686,000 person trips; 109,000 transit trips today (66,600 starting in
+  the area, matching the boardings); commuters from outside 82 % by car, 13 % transit. With
+  transit replaced and 10 % of car trips moved: 152,000 requests a day (was 533,000), about
+  17,000 in the peak hour and 5,200 in the busiest 15 minutes (07:30, work and 8:00 classes);
+  the busiest curb outside a stadium sees 280 requests in 15 minutes and the largest office
+  block 135 arrivals; a Twins crowd leaves Target Field with about 2,800 requests in its busiest 15 minutes.
+- **Fleet** (`data/fleet_sweep*.json`, `docs/results/`, 05:30–10:00 Wednesday, 1:5):
+  | Transit kept, 10 % of car trips → SDEV | 500 | 1,000 | 1,500 | 2,000 | 3,000 |
+  |---|---|---|---|---|---|
+  | Average wait (min) | 35.3 | 15.3 | 9.8 | 8.7 | 6.5 |
+  | Riders delivered (of 15,700) | 11,840 | 14,680 | 15,115 | 15,200 | 15,245 |
+  | Occupancy · empty miles | 2.05 · 37 % | 1.27 · 40 % | 0.95 · 43 % | 0.83 · 45 % | 0.66 · 46 % |
+
+  | Transit replaced too | 1,000 | 2,000 | 3,000 | 4,000 | 5,000 | 6,000 |
+  |---|---|---|---|---|---|---|
+  | Average wait (min) | 46.9 | 24.5 | 16.6 | 11.4 | 9.1 | 8.9 |
+  | Riders delivered (of 50,000) | 26,525 | 36,070 | 39,900 | 41,810 | 42,265 | 41,440 |
+  | Occupancy · empty miles | 2.78 · 33 % | 2.14 · 36 % | 1.67 · 37 % | 1.37 · 39 % | 1.20 · 40 % | 1.08 · 42 % |
+  The page's default fleet is now 5,000 vehicles (was 8,000). Waits stop falling near 9 minutes:
+  rides average 25 minutes (p90 55) because most riders board at edge transfer points and pooled
+  rides stop on the way, and empty vehicles drive out to those edges through the morning traffic.
+  The tables in Phases 6 and 8 are the earlier demand's and are kept as history.
+- Tests: `tests/test_build_demand.py` (a lumped block spreads to the nearby tower with its
+  commuters; no buildings, no spreading); `tests/demand.test.cjs` (boardings within 20 % of
+  66,600, commuter shares, busiest curb < 400 and largest office block < 200 requests in 15
+  minutes, no block over 10,000 jobs, students on the class grid, class changes in the passing
+  time, errands off); fleet, page and metrics tests updated for the new defaults.
+
 ## Performance budget (targets)
 
 | Item | Target |
@@ -452,3 +519,4 @@ Split into four steps so each lands green on its own.
 | Fleet fix | done | Riders/fleet 1:10 (sweeps 1:5), cars 1:20; dispatch index and rebalancing fixes; all-transit scenario is street-bound (~105k riders by 10:00), transit-kept scenario needs ~4,000 vehicles for 8.7 min. |
 | 8 | done | Metrics (VMT/VHT, deadhead, occupancy, utilisation, distributions, series, bridge loads), CSV export on the page, `tools/run_scenario.cjs` sweeps with CSV + SVG chart, recorded in `docs/results/`. |
 | 9 | done | README and ARCHITECTURE rewritten with screenshots, credits on both pages and in the README, phone layout fixes, publish checks (`tests/publish.test.cjs`). Pages enabled 2026-10-24 (main, root); both pages and every asset they load return 200. |
+| 10 | done | Demand calibrated to ACS 2024, fall 2025 Metro Transit boardings, UMN and Downtown Council figures: walking/cycling and carpooling beyond 800 m, transit shares by traveller, LODES job lumps spread over floor space, UMN class grid, 90 % of car trips kept by default, errands optional. Requests 533k → 152k a day; default fleet 8,000 → 5,000 (9-min wait, transit replaced); transit kept needs 1,500 (was 4,000). |

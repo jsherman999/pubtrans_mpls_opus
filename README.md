@@ -38,12 +38,17 @@ measurements behind each step: [PLAN.md](PLAN.md). Data formats:
   West Bank, Nicollet Island, Marcy-Holmes, Dinkytown, the UMN East Bank and Stadium Village:
   a 6.1 × 4.1 km box with 5,327 intersections, 459 km of drivable street, 356 signal
   controllers, all eight Mississippi road bridges, and 205 roads leaving the map.
-- **The people:** 114,000 residents and 226,000 jobs from the 2020 Census and LEHD LODES 2023:
-  commuters who arrive from the direction of their homes (and work from home on some days),
-  hospital shifts, UMN students between classes, errands, visitors and an evening Twins game.
-  About 720,000 trips on a Wednesday, with the morning and evening peaks where they should be.
-- **The choice of mode:** short trips are walked; of the rest, a lever sets how many of today's
-  car trips are still driven, and whether today's transit riders use SDEVs instead.
+- **The people:** 114,000 residents and 226,000 jobs from the 2020 Census and LEHD LODES 2023
+  (jobs that LODES files under one address, such as all of the university's, spread over the
+  buildings nearby): commuters who arrive from the direction of their homes (and work from home
+  on some days), hospital shifts, UMN students arriving for class and changing banks between
+  classes, errands and visitors (optional), and an evening Twins game. About 690,000 trips on a
+  Wednesday, with the surges where they should be.
+- **The choice of mode:** today's modes first. Short trips are walked; longer ones are walked or
+  cycled, driven or taken on transit in shares calibrated to the 2024 American Community Survey
+  and fall 2025 Metro Transit boardings (about 109,000 transit trips a Wednesday touch the area).
+  Then two levers: whether today's transit riders use SDEVs instead, and how many of today's car
+  trips are still driven (90 % by default).
 - **The fleet:** sedans (4 seats), shuttles (8) and buses (20), electric with batteries and
   charging, from five parking-ramp depots (open, close or add your own). Riders are pooled by
   area, picked up by vehicles already passing, and the idle fleet is rebalanced toward the next
@@ -80,30 +85,32 @@ OSM way, or **Plan a route** to compare the fastest car route with the fastest s
 
 ## Results: how big a fleet?
 
-A Wednesday morning, 05:30–10:00, half of today's car trips moved to SDEVs, simulated at 1:5
-(each rider and fleet agent stands for five), recorded in [`docs/results/`](docs/results/):
+A Wednesday morning, 05:30–10:00, a tenth of today's car trips moved to SDEVs, simulated at
+1:5 (each rider and fleet agent stands for five), recorded in [`docs/results/`](docs/results/).
+The average wait counts every rider since 05:30, those still waiting at 10:00 included.
 
-| Transit kept | 1,000 | 2,000 | 3,000 | **4,000** | 5,000 |
+| Transit kept (15,700 ride requests) | 500 | 1,000 | **1,500** | 2,000 | 3,000 |
 |---|---|---|---|---|---|
-| Average wait (min) | 44.6 | 21.1 | 12.6 | **8.7** | 6.8 |
-| Riders delivered | 37,570 | 49,765 | 54,320 | 56,030 | 56,805 |
+| Average wait (min) | 35.3 | 15.3 | **9.8** | 8.7 | 6.5 |
+| Riders delivered | 11,840 | 14,680 | 15,115 | 15,200 | 15,245 |
 
-| Transit replaced too | 4,000 | 6,000 | 8,000 | 10,000 | 12,000 | 16,000 |
+| Transit replaced too (50,000 ride requests) | 1,000 | 2,000 | 3,000 | 4,000 | **5,000** | 6,000 |
 |---|---|---|---|---|---|---|
-| Average wait (min) | 47.0 | 36.2 | 30.6 | 26.5 | 23.5 | 23.5 |
-| Riders delivered | 82,470 | 95,670 | 100,710 | 105,505 | 105,470 | 105,750 |
+| Average wait (min) | 46.9 | 24.5 | 16.6 | 11.4 | **9.1** | 8.9 |
+| Riders delivered | 26,525 | 36,070 | 39,900 | 41,810 | 42,265 | 41,440 |
 
-- **Keeping today's transit**, about **4,000 vehicles** carry half of today's car trips with an
-  average wait under 9 minutes.
-- **Replacing transit as well**, requests peak at about 76,000 people an hour. Deliveries level
-  off near 105,000 by 10:00 from about 10,000 vehicles: the streets are full, rides take
-  25 minutes, and more vehicles only add to the queues. No fleet of vans reaches a 15-minute
-  average wait in this scenario; what limits it is street capacity at the bridges and freeway
-  exits, not the number of vehicles. The page defaults to 8,000 vehicles in this scenario.
+- **Keeping today's transit**, about **1,500 vehicles** carry a tenth of today's car trips with
+  a 10-minute average wait.
+- **Replacing transit as well**, requests peak at about 17,000 an hour (5,200 in the busiest
+  15 minutes, as people leave for 8:00 work and classes). About **5,000 vehicles** give a
+  9-minute average wait; more barely help, because rides average 25 minutes: most riders come
+  from outside the area and board at transfer points on its edge, and pooled rides stop on the
+  way. The page defaults to 5,000 vehicles.
 
-An earlier sweep suggested 19,000 vehicles; that was an artefact of coarse sampling (at 1:20,
-pooling saw a demand 20 times sparser than reality). "Fleet sizing, revisited" in
-[PLAN.md](PLAN.md) has the story.
+These replace earlier results (4,000 and 8,000+ vehicles) from a demand model that counted
+everyone who did not drive as a transit rider and stacked whole employers on single blocks; it
+asked for 3.5 times as many rides as the counts support. "Phase 10" in [PLAN.md](PLAN.md) has
+the calibration and its sources.
 
 ## Run locally
 
@@ -124,8 +131,8 @@ The pages also open straight from the file system (`file://`).
 The same engine runs in Node (18 or later), seeded, for scenario runs and sweeps:
 
 ```
-node tools/run_scenario.cjs --until 10:00 --fleet 8000 --out-dir results/base
-node tools/run_scenario.cjs --vary fleet=2000,3000,4000,5000 --keep-transit --sampling 5 --out-dir results/sweep
+node tools/run_scenario.cjs --until 10:00 --fleet 5000 --out-dir results/base
+node tools/run_scenario.cjs --vary fleet=500,1000,1500,2000 --keep-transit --sampling 5 --out-dir results/sweep
 ```
 
 A single run writes `summary.csv` (fleet and car miles and hours, empty share, occupancy,
@@ -140,8 +147,8 @@ delivered against the varied setting). Other options: `--mix sedans,shuttles,bus
 `tools/fleet_sweep.cjs` searches for the smallest fleet that meets a target wait:
 
 ```
-node tools/fleet_sweep.cjs --totals 4000,8000,12000 --until 10:00 --target 10 --out data/fleet_sweep.json
-node tools/fleet_sweep.cjs --totals 2000,3000,4000 --keep-transit
+node tools/fleet_sweep.cjs --totals 3000,4000,5000,6000 --until 10:00 --target 10 --out data/fleet_sweep.json
+node tools/fleet_sweep.cjs --totals 1000,1500,2000 --keep-transit
 ```
 
 ## Data builds
@@ -152,8 +159,8 @@ committed, so nothing here needs to run to use the pages. Each needs network acc
 
 ```
 python3 tools/build_osm.py --fetch         # streets   -> data/mpls_graph.js      (541 KB)
-python3 tools/build_demand.py --fetch      # Census    -> data/mpls_demand.js     (223 KB)
 python3 tools/build_buildings.py --fetch   # buildings -> data/mpls_buildings.js  (573 KB)
+python3 tools/build_demand.py --fetch      # Census    -> data/mpls_demand.js     (224 KB; uses the buildings)
 ```
 
 Rebuild from saved downloads by leaving out `--fetch` (`build_osm.py` takes
@@ -182,7 +189,10 @@ node tests/simulation.cjs                              # original grid app (slow
 This is an illustrative model, not a calibrated forecast.
 
 - Trip timing, mode shares, hybrid work and student travel are modelled from Census counts and
-  stated assumptions (see [PLAN.md](PLAN.md)), not from a travel survey.
+  calibrated to published totals (ACS commuting, Metro Transit boardings, UMN and Downtown
+  Council figures; see [PLAN.md](PLAN.md), Phase 10), not fitted to a travel survey.
+- Riders from outside the area board at a transfer point on its edge, so their rides inside the
+  area are long; their trips beyond the edge are not simulated.
 - Road capacity uses lanes and saturation flow by road class; turn lanes, signal coordination
   and pedestrians are not modelled. Light rail is not modelled.
 - People outside the box appear only as trips crossing its edge.

@@ -49,9 +49,10 @@ with `<script src>`, so they work from `file://` and GitHub Pages. Formats are i
   N 44.997, E −93.215, simplified to 5,327 topological nodes and 6,614 links (11,007 directed
   arcs) with geometry, speeds, lanes, one-ways, shuttle-only streets, bridges, signal controllers
   and stop approaches. Roads leaving the box end at 205 portals.
-- **Demand** (`data/mpls_demand.js`, 223 KB): 822 census blocks with residents (2020 Census) and
-  jobs by sector (LEHD LODES 2023); home-to-work flows inside the box and by direction to and
-  from it; UMN campus, hospitals and venues; 877 parking facilities.
+- **Demand** (`data/mpls_demand.js`, 224 KB): 876 census blocks with residents (2020 Census) and
+  jobs by sector (LEHD LODES 2023, with jobs filed under one address spread over nearby floor
+  space); home-to-work flows inside the box and by direction to and from it; UMN campus,
+  hospitals and venues; 877 parking facilities.
 - **Buildings** (`data/mpls_buildings.js`, 573 KB, loaded after the page starts): 10,680
   footprints with heights.
 
@@ -90,11 +91,14 @@ headway but at most 4 cars of lane space. Every number shown or exported is scal
 people and vehicles.
 
 **Demand.** `src/demand.js` builds a full-scale day (commuters with sector start times, hybrid
-presence by weekday and hospital shifts; UMN students and class changes; errands; visitors;
-events), then samples agents with stochastic rounding. Trips from outside enter in the compass
-sector of home: drivers at a map-edge road in that direction, shuttle riders at its edge hub.
-Short trips are walked. Two scenario levers apply at release: the share of today's car trips
-still driven, and whether today's transit riders use SDEV shuttles.
+presence by weekday and hospital shifts; UMN students timed to the class schedule and changing
+banks between classes; errands and visitors, which can be switched off; events), then samples
+agents with stochastic rounding. Each trip gets today's mode: walked under 800 m; beyond that
+walked or cycled, driven, or on transit with shares by who travels, calibrated to ACS 2024
+commuting and fall 2025 Metro Transit boardings (PLAN.md, Phase 10). Trips from outside enter in
+the compass sector of home: drivers at a map-edge road in that direction, shuttle riders at its
+edge hub. Two scenario levers apply at release: the share of today's car trips still driven
+(90 % by default), and whether today's transit riders use SDEV shuttles.
 
 ## The pages
 
@@ -116,7 +120,7 @@ preview.
 | | |
 |---|---|
 | A* route on the real network | 0.12 ms |
-| Census AM peak, 1:10, 8,000-vehicle fleet | ~20 ms per 10 steps in Node, ~40 ms per 10× frame in Chrome with drawing |
+| Census AM peak, 1:10, 5,000-vehicle fleet | ~19 ms per 10 steps in Node, ~40 ms per 10× frame in Chrome with drawing |
 | Driver view downtown | ~0.5 ms of drawing calls per frame, ≤ ~80 buildings |
 
 Phones have not been measured on a device; at 4–5× slower the default 10× playback should fit,

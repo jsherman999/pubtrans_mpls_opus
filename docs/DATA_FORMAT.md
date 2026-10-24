@@ -110,7 +110,7 @@ OpenStreetMap (ODbL). Coordinates are **meters** in the same projection as the s
 |---|---|
 | `x`, `y` | Block internal point |
 | `pop`, `hu` | 2020 Census population and housing units |
-| `jobs` | LODES jobs (all, JT00 S000) |
+| `jobs` | LODES jobs (all, JT00 S000), after spreading blocks with more jobs than floor space (below) |
 | `office`, `retail`, `food`, `health`, `edu` | Jobs in NAICS groups: office = information, finance, real estate, professional, management, administrative, public administration (hybrid work applies); retail; accommodation and food; health care; education |
 | `inbound` | Of `jobs`, held by people living outside the box |
 | `outbound` | Residents working outside the box |
@@ -119,7 +119,15 @@ OpenStreetMap (ODbL). Coordinates are **meters** in the same projection as the s
 
 Totals (residents, housing units, jobs by group), commuters (internal, inbound, outbound; OD vs
 WAC check), commuters by direction, the downtown subset (Downtown West and East, North Loop,
-Loring Park, Elliot Park, approximate outline), parking facilities and spaces, warnings.
+Loring Park, Elliot Park, approximate outline), parking facilities and spaces, `jobs_spread`,
+warnings.
+
+LODES files every job of some employers under one block (all University of Minnesota jobs sit in
+one East Bank block). With `data/mpls_buildings.js` present, a block with at least 1,500 jobs and
+less than 15 m² of non-residential floor space per job keeps what its floor space holds and passes
+the rest, with their commuters, to blocks within 400 m (any campus block, for a campus block) in
+proportion to their spare floor space at 25 m² per job. Totals are unchanged. `jobs_spread` lists
+each such block as `[GEOID, LODES jobs, jobs kept]`.
 
 ---
 

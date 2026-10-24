@@ -2,12 +2,12 @@
   "settings": {
     "scales": null,
     "totals": [
+      1000,
+      2000,
+      3000,
       4000,
-      6000,
-      8000,
-      10000,
-      12000,
-      16000
+      5000,
+      6000
     ],
     "mix": [
       0.1,
@@ -19,11 +19,77 @@
     "sampling": 5,
     "seed": 1,
     "day": 2,
-    "carShare": 0.5,
+    "carShare": 0.9,
     "transitReplaced": true,
     "out": "data/fleet_sweep.json"
   },
   "rows": [
+    {
+      "scale": 1000,
+      "fleet": {
+        "sedans": 100,
+        "shuttles": 600,
+        "buses": 300,
+        "total": 1000
+      },
+      "avgWaitMin": 46.91,
+      "p90WaitMin": 99,
+      "stillWaiting": 17075,
+      "delivered": 26525,
+      "avgRideMin": 25.89,
+      "pooledShare": 0.71,
+      "charging": 0,
+      "energyMWh": 40.5,
+      "ridersPerVehicleHour": 5.89,
+      "fleetKm": 75350,
+      "stuckJumps": 97,
+      "seconds": 8.7,
+      "worstFrameMs": 61.8
+    },
+    {
+      "scale": 2000,
+      "fleet": {
+        "sedans": 200,
+        "shuttles": 1200,
+        "buses": 600,
+        "total": 2000
+      },
+      "avgWaitMin": 24.51,
+      "p90WaitMin": 63,
+      "stillWaiting": 4620,
+      "delivered": 36070,
+      "avgRideMin": 25.61,
+      "pooledShare": 1,
+      "charging": 0,
+      "energyMWh": 64.9,
+      "ridersPerVehicleHour": 4.01,
+      "fleetKm": 127063,
+      "stuckJumps": 277,
+      "seconds": 10.7,
+      "worstFrameMs": 134.8
+    },
+    {
+      "scale": 3000,
+      "fleet": {
+        "sedans": 300,
+        "shuttles": 1800,
+        "buses": 900,
+        "total": 3000
+      },
+      "avgWaitMin": 16.57,
+      "p90WaitMin": 47.2,
+      "stillWaiting": 1105,
+      "delivered": 39900,
+      "avgRideMin": 25.33,
+      "pooledShare": 0.998,
+      "charging": 0,
+      "energyMWh": 81.6,
+      "ridersPerVehicleHour": 2.96,
+      "fleetKm": 165900,
+      "stuckJumps": 430,
+      "seconds": 11.8,
+      "worstFrameMs": 145.7
+    },
     {
       "scale": 4000,
       "fleet": {
@@ -32,19 +98,41 @@
         "buses": 1200,
         "total": 4000
       },
-      "avgWaitMin": 46.95,
-      "p90WaitMin": 105.8,
-      "stillWaiting": 73415,
-      "delivered": 82470,
-      "avgRideMin": 22.04,
-      "pooledShare": 0.618,
+      "avgWaitMin": 11.41,
+      "p90WaitMin": 41.5,
+      "stillWaiting": 255,
+      "delivered": 41810,
+      "avgRideMin": 25.8,
+      "pooledShare": 0.903,
       "charging": 0,
-      "energyMWh": 115.2,
-      "ridersPerVehicleHour": 4.58,
-      "fleetKm": 258769,
-      "stuckJumps": 721,
-      "seconds": 13.8,
-      "worstFrameMs": 107.1
+      "energyMWh": 93.1,
+      "ridersPerVehicleHour": 2.32,
+      "fleetKm": 196689,
+      "stuckJumps": 611,
+      "seconds": 12.6,
+      "worstFrameMs": 121.8
+    },
+    {
+      "scale": 5000,
+      "fleet": {
+        "sedans": 500,
+        "shuttles": 3000,
+        "buses": 1500,
+        "total": 5000
+      },
+      "avgWaitMin": 9.11,
+      "p90WaitMin": 28.4,
+      "stillWaiting": 160,
+      "delivered": 42265,
+      "avgRideMin": 26.08,
+      "pooledShare": 0.779,
+      "charging": 0,
+      "energyMWh": 97.7,
+      "ridersPerVehicleHour": 1.88,
+      "fleetKm": 220335,
+      "stuckJumps": 798,
+      "seconds": 13,
+      "worstFrameMs": 77.4
     },
     {
       "scale": 6000,
@@ -54,108 +142,29 @@
         "buses": 1800,
         "total": 6000
       },
-      "avgWaitMin": 36.2,
-      "p90WaitMin": 90.7,
-      "stillWaiting": 50570,
-      "delivered": 95670,
-      "avgRideMin": 23.59,
-      "pooledShare": 0.793,
+      "avgWaitMin": 8.91,
+      "p90WaitMin": 31.9,
+      "stillWaiting": 140,
+      "delivered": 41440,
+      "avgRideMin": 25.58,
+      "pooledShare": 0.712,
       "charging": 0,
-      "energyMWh": 138.7,
-      "ridersPerVehicleHour": 3.54,
-      "fleetKm": 308771,
-      "stuckJumps": 1182,
-      "seconds": 14.8,
-      "worstFrameMs": 125.1
-    },
-    {
-      "scale": 8000,
-      "fleet": {
-        "sedans": 800,
-        "shuttles": 4800,
-        "buses": 2400,
-        "total": 8000
-      },
-      "avgWaitMin": 30.63,
-      "p90WaitMin": 79.8,
-      "stillWaiting": 35000,
-      "delivered": 100710,
-      "avgRideMin": 24.95,
-      "pooledShare": 0.943,
-      "charging": 0,
-      "energyMWh": 158.4,
-      "ridersPerVehicleHour": 2.8,
-      "fleetKm": 348725,
-      "stuckJumps": 1798,
-      "seconds": 16.2,
-      "worstFrameMs": 147.2
-    },
-    {
-      "scale": 10000,
-      "fleet": {
-        "sedans": 1000,
-        "shuttles": 6000,
-        "buses": 3000,
-        "total": 10000
-      },
-      "avgWaitMin": 26.52,
-      "p90WaitMin": 70,
-      "stillWaiting": 20260,
-      "delivered": 105505,
-      "avgRideMin": 26.35,
-      "pooledShare": 1.104,
-      "charging": 0,
-      "energyMWh": 171.1,
-      "ridersPerVehicleHour": 2.34,
-      "fleetKm": 391985,
-      "stuckJumps": 2363,
-      "seconds": 17.1,
-      "worstFrameMs": 185.3
-    },
-    {
-      "scale": 12000,
-      "fleet": {
-        "sedans": 1200,
-        "shuttles": 7200,
-        "buses": 3600,
-        "total": 12000
-      },
-      "avgWaitMin": 23.54,
-      "p90WaitMin": 57.3,
-      "stillWaiting": 10060,
-      "delivered": 105470,
-      "avgRideMin": 26.31,
-      "pooledShare": 1.257,
-      "charging": 0,
-      "energyMWh": 178.4,
-      "ridersPerVehicleHour": 1.95,
-      "fleetKm": 421538,
-      "stuckJumps": 2827,
-      "seconds": 17.9,
-      "worstFrameMs": 183.9
-    },
-    {
-      "scale": 16000,
-      "fleet": {
-        "sedans": 1600,
-        "shuttles": 9600,
-        "buses": 4800,
-        "total": 16000
-      },
-      "avgWaitMin": 23.48,
-      "p90WaitMin": 64.2,
-      "stillWaiting": 5300,
-      "delivered": 105750,
-      "avgRideMin": 25.6,
-      "pooledShare": 1.3,
-      "charging": 0,
-      "energyMWh": 195.1,
-      "ridersPerVehicleHour": 1.47,
-      "fleetKm": 467902,
-      "stuckJumps": 3615,
-      "seconds": 20.3,
-      "worstFrameMs": 219.8
+      "energyMWh": 96.1,
+      "ridersPerVehicleHour": 1.53,
+      "fleetKm": 235040,
+      "stuckJumps": 999,
+      "seconds": 13.8,
+      "worstFrameMs": 74.7
     }
   ],
-  "recommended": null
+  "recommended": {
+    "scale": 5000,
+    "fleet": {
+      "sedans": 500,
+      "shuttles": 3000,
+      "buses": 1500,
+      "total": 5000
+    },
+    "avgWaitMin": 9.11
+  }
 }

@@ -67,12 +67,13 @@
                                         // (1:5 in tools/fleet_sweep.cjs, which values accuracy)
     carSampling: 20,                    // cars per private-car agent (traffic is coarser than pooling)
     day: 2,                             // 0 = Monday ... 6 = Sunday
-    carShare: 0.5,                      // share of today's car trips still made by private car;
-                                        // the rest switch to SDEV shuttles (most cars replaced)
+    carShare: 0.9,                      // share of today's car trips still made by private car;
+                                        // the rest switch to SDEV shuttles
+    background: true,                   // residents' errands and visitors through the day (Census demand)
     transitReplaced: true,              // today's transit riders ride SDEV shuttles (else not simulated)
     rebalance: true,                    // idle vehicles move toward expected demand (Census demand)
     ev: true,                           // battery-electric fleet: range, charging at depots
-    demandFleet: { sedans: 80, shuttles: 480, buses: 240 },   // agents (× sampling = 8,000 vehicles), where deliveries level off (fleet sweep)
+    demandFleet: { sedans: 50, shuttles: 300, buses: 150 },   // agents (× sampling = 5,000 vehicles): a 10-minute average wait with transit replaced (fleet sweep)
     rareEvents: true,
   };
 
@@ -111,7 +112,7 @@
       population: opts.population, sedans: opts.sedans, shuttles: opts.shuttles, buses: opts.buses,
       rideSharing: opts.rideSharing, privateTraffic: opts.privateTraffic,
       depots: null,
-      day: opts.day, events: opts.events ?? (demand ? Dm.DEFAULTS.events : []), carShare: opts.carShare,
+      day: opts.day, events: opts.events ?? (demand ? Dm.DEFAULTS.events : []), carShare: opts.carShare, background: opts.background,
       transitReplaced: opts.transitReplaced, rebalance: opts.rebalance && !!demand, ev: opts.ev,
     };
 
@@ -382,7 +383,7 @@
       places.named = true;
     }
     function planDay() {
-      const plan = demand.generate({ day: S.dayOfWeek, seed: opts.seed + S.day, sampling: scale, events: settings.events, dayStart });
+      const plan = demand.generate({ day: S.dayOfWeek, seed: opts.seed + S.day, sampling: scale, events: settings.events, background: settings.background, dayStart });
       S.plan = plan.summary;
       S.trips = plan.trips;
       S.agendaPos = 0;
@@ -910,7 +911,7 @@
     // stand-in for what history would say; the dispatcher does not see the actual requests early.
     function buildForecast() {
       if (!demand) return [];
-      const other = demand.generate({ day: S.dayOfWeek, seed: opts.seed + S.day + 7777, sampling: scale, events: settings.events, dayStart });
+      const other = demand.generate({ day: S.dayOfWeek, seed: opts.seed + S.day + 7777, sampling: scale, events: settings.events, background: settings.background, dayStart });
       const out = [];
       for (const tr of other.trips) {
         if (tr.mode === "walk") continue;
@@ -1589,6 +1590,7 @@
       clearIndex() { idleIndex = null; },
       get parkingLots() { return parkingLots; },
       setEvents(list) { settings.events = list; },
+      setBackground(on) { settings.background = !!on; },   // takes effect when the day restarts
       chokepoints: (top) => congestion.chokepoints(S.vehicles, top),
       get state() { return S; },
       step, run, reset,

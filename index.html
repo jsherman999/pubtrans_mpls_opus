@@ -253,18 +253,20 @@
   <div class="slider"><label for="carShare">Car trips kept</label><span id="carShareVal" class="num"></span>
     <input type="range" id="carShare" min="0" max="100" step="5"></div>
   <p class="hint" id="carShareHint"></p>
+  <label class="row" style="justify-content:flex-start;gap:8px"><input type="checkbox" id="background" checked> Errands and visitors through the day</label>
   <div class="row"><label for="sampling">Sampling</label><select id="sampling">
     <option value="5">1 agent : 5 people (most accurate, slowest)</option><option value="10">1 agent : 10 people</option>
     <option value="20">1 agent : 20 people (fastest)</option></select></div>
   <div class="row"><span>Residents · jobs present today</span><span id="dPeople" class="num">—</span></div>
   <div class="row"><span>UMN Minneapolis campus today</span><span id="dCampus" class="num">—</span></div>
-  <div class="row"><span>Trips today: walk · shuttle · car</span><span id="dTrips" class="num">—</span></div>
+  <div class="row"><span title="Walking or cycling (not simulated) · SDEV shuttle · private car">Trips today: walk/bike · shuttle · car</span><span id="dTrips" class="num">—</span></div>
   <div class="chart"><div class="head"><span>Trips planned by hour</span><span class="num" id="planLegend"></span></div>
     <canvas id="chartPlan" aria-label="Person trips planned for today by hour, shuttle and car"></canvas></div>
   <div id="planTip" class="num hint" aria-live="off"></div>
   <p class="hint">Homes from 2020 Census blocks, jobs and commutes from LEHD LODES 2023, parking from OpenStreetMap;
-    UMN attendance, hospital shifts, errands, visitors and events are modelled assumptions (see PLAN.md, Phase 5).
-    Changing the day or event restarts the day.</p>
+    jobs LODES files under one address are spread over nearby floor space. Today's modes follow ACS 2024 commuting and
+    fall 2025 Metro Transit boardings; UMN classes, hospital shifts, errands, visitors and events are modelled (see PLAN.md, Phases 5 and 10).
+    Changing the day, event or errands restarts the day.</p>
   </details>
 
   <details data-sec="fleet"><summary>Fleet &amp; service</summary>
@@ -808,8 +810,8 @@ function start(graph) {
   $("ev").addEventListener("change", (e) => { sim.setEv(e.target.checked); refresh(); });
   if (sim.demand) {
     $("fleetHint").textContent = "Removing vehicles parks idle ones first; busy ones finish their riders, then leave. The default fleet " +
-      "is 8,000 vehicles: with all transit replaced, more vehicles stop adding deliveries because the streets are full " +
-      "(tools/fleet_sweep.cjs). With today's transit kept, about 4,000 give a 9-minute average wait.";
+      "is 5,000 vehicles, a 9-minute average wait with today's transit replaced and a tenth of car trips moved to shuttles " +
+      "(tools/fleet_sweep.cjs). With today's transit kept, about 1,500 give a 10-minute average wait.";
     $("transitRow").hidden = false; $("rebalanceRow").hidden = false;
     $("transitReplaced").checked = sim.settings.transitReplaced;
     $("rebalance").checked = sim.settings.rebalance;
@@ -924,7 +926,7 @@ function start(graph) {
   // ---------------------------------------------------------------- Census demand panel
   const EVENTS = [
     { label: "No event", events: [] },
-    { label: "Twins at Target Field, 19:10 (25,000)", events: [{ venue: "Target Field", start: 19 * 60 + 10, attendance: 25000, length: 180 }] },
+    { label: "Twins at Target Field, 19:10 (22,000)", events: [{ venue: "Target Field", start: 19 * 60 + 10, attendance: 22000, length: 180 }] },
     { label: "Vikings at U.S. Bank Stadium, 12:00 (66,000)", events: [{ venue: "U.S. Bank Stadium", start: 12 * 60, attendance: 66000, length: 210 }] },
     { label: "Timberwolves at Target Center, 19:00 (17,000)", events: [{ venue: "Target Center", start: 19 * 60, attendance: 17000, length: 150 }] },
     { label: "Gophers at Huntington Bank Stadium, 14:30 (45,000)", events: [{ venue: "Huntington Bank Stadium", start: 14.5 * 60, attendance: 45000, length: 210 }] },
@@ -944,6 +946,8 @@ function start(graph) {
     $("day").addEventListener("change", (e) => { sim.setDay(Number(e.target.value)); restart(); });
     $("event").addEventListener("change", (e) => { sim.setEvents(EVENTS[Number(e.target.value)].events); restart(); });
     $("carShare").addEventListener("input", (e) => { sim.setCarShare(Number(e.target.value) / 100); refresh(); });
+    $("background").checked = sim.settings.background;
+    $("background").addEventListener("change", (e) => { sim.setBackground(e.target.checked); restart(); });
     $("sampling").addEventListener("change", (e) => { params.set("sampling", e.target.value); location.search = params.toString(); });
     const plan = $("chartPlan");
     plan.addEventListener("pointermove", (e) => { planHover = Math.floor(e.offsetX / ((plan.clientWidth || 300) / 24)); drawPlan(); });
@@ -958,7 +962,7 @@ function start(graph) {
     const p = sim.state.plan, keep = sim.settings.carShare;
     $("carShareVal").textContent = `${Math.round(keep * 100)} %`;
     $("carShareHint").textContent = `${Math.round(keep * 100)} % of the trips made by car today are still driven; the rest, ` +
-      "and everyone who rides transit today, take SDEV shuttles. Trips under 800 m are walked.";
+      "and everyone who rides transit today, take SDEV shuttles. Walkers and cyclists keep walking and cycling.";
     $("dPeople").textContent = `${p.residents.toLocaleString()} · ${Math.round(p.jobsPresent).toLocaleString()}`;
     $("dCampus").textContent = Math.round(p.campusAttendance).toLocaleString();
     const tot = planByHour().reduce((a, h) => ({ walk: a.walk + h.walk, shuttle: a.shuttle + h.shuttle, car: a.car + h.car }), { walk: 0, shuttle: 0, car: 0 });

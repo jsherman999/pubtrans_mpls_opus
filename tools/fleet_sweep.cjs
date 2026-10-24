@@ -31,7 +31,7 @@ function load(file, key) {
 
 function parseArgs(argv) {
   const a = { scales: null, totals: [3000, 4000, 5000, 6000, 8000, 10000], mix: [0.1, 0.6, 0.3], until: "10:00", target: 10,
-    sampling: 5, seed: 1, day: 2, carShare: 0.5, transitReplaced: true, out: null };
+    sampling: 5, seed: 1, day: 2, carShare: 0.9, transitReplaced: true, out: null };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i].replace(/^--/, ""), v = argv[i + 1];
     if (k === "scales") { a.scales = v.split(",").map(Number); a.totals = null; }

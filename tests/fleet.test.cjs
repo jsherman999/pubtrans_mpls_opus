@@ -49,7 +49,7 @@ const anchor = (sim, v) => (v.lane >= 0 ? sim.router.arcs[v.route[v.ri]].to : v.
   pooled.run(20 * 150); solo.run(20 * 150);
   assert.strictEqual(solo.state.pooled, 0, "pooling 0 %: one rider per trip");
   assert.strictEqual(solo.state.sharedPickups, 0);
-  assert.ok(pooled.state.pooled > 1000, `pooling 100 %: riders share (${pooled.state.pooled})`);
+  assert.ok(pooled.state.pooled > 500, `pooling 100 %: riders share (${pooled.state.pooled})`);
   // Pools and carpools stay compact: every group's pickups lie in one 600 m area, as do its dropoffs.
   const cell = (n) => `${Math.floor(graph.nodes.x[n] / 600)},${Math.floor(graph.nodes.y[n] / 600)}`;
   let checked = 0;
@@ -62,7 +62,7 @@ const anchor = (sim, v) => (v.lane >= 0 ? sim.router.arcs[v.route[v.ri]].to : v.
   }
   assert.ok(checked > 5, `pools in progress checked (${checked})`);
   assert.ok(pooled.averageQueueMinutes() < solo.averageQueueMinutes(), "pooling shortens waits when vehicles are scarce");
-  console.log(`PASS: pooling 100 % pools ${(pooled.state.pooled * 20).toLocaleString()} riders by 08:00 in compact 600 m areas ` +
+  console.log(`PASS: pooling 100 % pools ${(pooled.state.pooled * pooled.scale).toLocaleString()} riders by 08:00 in compact 600 m areas ` +
     `(avg wait ${pooled.averageQueueMinutes().toFixed(1)} min vs ${solo.averageQueueMinutes().toFixed(1)} min with pooling off).`);
 }
 
@@ -72,7 +72,7 @@ const anchor = (sim, v) => (v.lane >= 0 ? sim.router.arcs[v.route[v.ri]].to : v.
   for (const s of [on, off, allCars, noCars]) s.run(20 * 120);
   assert.strictEqual(on.state.transitTrips, 0);
   assert.ok(off.state.transitTrips > 0 && off.state.shuttleTrips < on.state.shuttleTrips * 0.75, "without transit replacement, transit riders are not shuttle riders");
-  assert.ok(allCars.state.carTrips > on.state.carTrips * 1.6 && noCars.state.carTrips === 0, "car share 100 % / 0 %");
+  assert.ok(allCars.state.carTrips > on.state.carTrips * 1.05 && noCars.state.carTrips === 0, "car share 100 % / 0 % (default 90 %)");
   assert.ok(noCars.state.shuttleTrips > on.state.shuttleTrips, "every car trip moved to shuttles");
   console.log(`PASS: by 07:30, transit replaced: ${on.state.shuttleTrips.toLocaleString()} shuttle trips; not replaced: ${off.state.shuttleTrips.toLocaleString()} ` +
     `(+${off.state.transitTrips.toLocaleString()} on transit); cars kept 100 %: ${allCars.state.carTrips.toLocaleString()} car trips, 0 %: none.`);
@@ -164,20 +164,20 @@ const anchor = (sim, v) => (v.lane >= 0 ? sim.router.arcs[v.route[v.ri]].to : v.
   }
   times.sort((x, y) => x - y);
   const avg = times.reduce((x, y) => x + y, 0) / times.length, p95 = times[Math.floor(times.length * 0.95)];
-  // 10× playback = 10 steps per 100 ms frame (default 1:10 sampling, 8,000-vehicle fleet). Desktop Chrome runs this code about 1.5–2× slower
+  // 10× playback = 10 steps per 100 ms frame (default 1:10 sampling, 5,000-vehicle fleet). Desktop Chrome runs this code about 1.5–2× slower
   // than Node (measured in Phases 3d–5), and drawing takes a few ms more.
   assert.ok(avg < 35 && p95 < 50, `AM peak at 1:10: ${avg.toFixed(1)} ms average, ${p95.toFixed(1)} ms p95 per 10 steps`);
   assert.deepStrictEqual(sim.audit(), []);
 
-  // Sweep: with today's transit kept and half of today's car trips moved to SDEV shuttles,
-  // 1,000 vehicles leave riders waiting and 4,000 bring the average wait under 10 minutes.
-  const result = sweep({ totals: [1000, 4000], scales: null, mix: [0.1, 0.6, 0.3], until: "10:00", target: 10, sampling: 10,
-    seed: 1, day: 2, carShare: 0.5, transitReplaced: false }, () => {});
+  // Sweep: with today's transit kept and a tenth of today's car trips moved to SDEV shuttles,
+  // 500 vehicles leave riders waiting and 2,000 bring the average wait under 15 minutes.
+  const result = sweep({ totals: [500, 2000], scales: null, mix: [0.1, 0.6, 0.3], until: "10:00", target: 15, sampling: 10,
+    seed: 1, day: 2, carShare: 0.9, transitReplaced: false }, () => {});
   const [small, big] = result.rows;
   assert.ok(small.avgWaitMin > big.avgWaitMin + 10, `a bigger fleet cuts waits (${small.avgWaitMin} → ${big.avgWaitMin} min)`);
-  assert.ok(result.recommended && result.recommended.fleet.total === 4000, "the sweep picks the fleet that meets the 10-minute target");
+  assert.ok(result.recommended && result.recommended.fleet.total === 2000, "the sweep picks the fleet that meets the 15-minute target");
   assert.strictEqual(big.stillWaiting, 0);
   console.log(`PASS: AM peak 07:00–10:00 at 1:10 runs ${avg.toFixed(1)} ms average (p95 ${p95.toFixed(1)}) per 10 steps in Node; ` +
-    `sweep (transit kept, half of car trips on shuttles): ${small.fleet.total.toLocaleString()} vehicles → ${small.avgWaitMin} min, ` +
+    `sweep (transit kept, a tenth of car trips on shuttles): ${small.fleet.total.toLocaleString()} vehicles → ${small.avgWaitMin} min, ` +
     `${big.fleet.total.toLocaleString()} → ${big.avgWaitMin} min, recommended ${result.recommended.fleet.total.toLocaleString()}.`);
 }

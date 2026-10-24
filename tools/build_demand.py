@@ -13,6 +13,8 @@ Sources (public domain):
         and aux), latest year available by default
     OpenStreetMap (Overpass): parking ramps and lots, where car trips into the area end
         (c) OpenStreetMap contributors, ODbL
+    data/mpls_buildings.js (tools/build_buildings.py): floor space, to spread jobs that LODES
+        files under one block (a university or a county's whole payroll) over their buildings
 
 Outputs (format in docs/DATA_FORMAT.md):
     data/mpls_demand.js           window.MPLS_DEMAND = {...}  (committed, loaded by the page)
@@ -58,6 +60,16 @@ JOB_GROUPS = {
     "health": ["CNS16"],
     "edu": ["CNS15"],
 }
+
+# LODES files every job of some employers under one block (all 24,500 UMN jobs sit in one East
+# Bank block). A block with more jobs than its non-residential floor space can hold passes the
+# excess to blocks nearby (campus blocks for the campus) in proportion to their spare space.
+LUMP_MIN_JOBS = 1500        # blocks with fewer jobs are left alone
+M2_PER_JOB_MIN = 15         # densest plausible office floor space per job (gross m2)
+M2_PER_JOB_SPARE = 25       # receivers take jobs up to one per this much floor space
+SPREAD_RADIUS_M = 400       # how far a block's excess jobs may move (off campus)
+NONRES_KINDS = {"commercial", "office", "university", "civic", "industrial", "other"}
+STOREY_M = 3.5
 
 # Rough direction from Minneapolis to neighbouring states, for out-of-state commuters (aux file).
 STATE_BEARING = {"55": 90.0, "19": 180.0, "38": 300.0, "46": 225.0}
@@ -211,7 +223,87 @@ def parking_facilities(osm, proj):
     return out
 
 
-def build(blocks, tracts, wac_rows, od_main_rows, od_aux_rows, bbox, year=LODES_YEAR, parking_osm=None):
+def floor_space_by_zone(buildings, zones):
+    """Non-residential floor space (m2) of data/mpls_buildings.js nearest each zone's point."""
+    floor = [0.0] * len(zones)
+    if not buildings or not zones:
+        return floor
+    b, pts, unit, kinds = buildings["buildings"], buildings["pts"], buildings["unit"], buildings["kinds"]
+    cell = 200.0
+    grid = defaultdict(list)
+    for i, z in enumerate(zones):
+        grid[(int(z["x"] // cell), int(z["y"] // cell))].append(i)
+    pi = 0
+    for k, n in enumerate(b["n"]):
+        x, y = b["x0"][k], b["y0"][k]
+        ring = [(x, y)]
+        for _ in range(n - 1):
+            x, y = x + pts[pi], y + pts[pi + 1]
+            pi += 2
+            ring.append((x, y))
+        if kinds[b["k"][k]] not in NONRES_KINDS:
+            continue
+        area = abs(sum(ring[i][0] * ring[i - 1][1] - ring[i - 1][0] * ring[i][1] for i in range(n))) / 2 * unit * unit
+        cx, cy = sum(p[0] for p in ring) / n * unit, sum(p[1] for p in ring) / n * unit
+        storeys = max(1, round((b["h"][k] - b["mh"][k]) / 10 / STOREY_M))
+        best, bi = float("inf"), -1
+        gx, gy = int(cx // cell), int(cy // cell)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for i in grid.get((gx + dx, gy + dy), []):
+                    d = (zones[i]["x"] - cx) ** 2 + (zones[i]["y"] - cy) ** 2
+                    if d < best:
+                        best, bi = d, i
+        if bi >= 0:
+            floor[bi] += area * storeys
+    return floor
+
+
+def spread_lumped_jobs(zones, internal_od, floor, campus_sites):
+    """Move jobs out of blocks with more jobs than floor space, with their commuters. Counts stay
+    whole numbers and every total is kept. Returns [(geoid, jobs before, jobs after)]."""
+    on_campus = [any(math.hypot(z["x"] - c["x"], z["y"] - c["y"]) <= c["r"] for c in campus_sites) for z in zones]
+    fields = ["jobs", *JOB_GROUPS, "inbound"]
+    od_by_work = defaultdict(set)
+    for key in internal_od:
+        od_by_work[key[1]].add(key)
+    moved = []
+    for src in sorted(range(len(zones)), key=lambda i: -zones[i]["jobs"]):
+        z = zones[src]
+        cap = floor[src] / M2_PER_JOB_MIN
+        if z["jobs"] < LUMP_MIN_JOBS or z["jobs"] <= cap:
+            continue
+        near = [i for i in range(len(zones)) if i != src and floor[i] > 0 and
+                (on_campus[i] if on_campus[src] else math.hypot(zones[i]["x"] - z["x"], zones[i]["y"] - z["y"]) <= SPREAD_RADIUS_M)]
+        spare = {i: max(0.0, floor[i] / M2_PER_JOB_SPARE - zones[i]["jobs"]) for i in near}
+        if sum(spare.values()) <= 0:
+            spare = {i: floor[i] for i in near}
+        total = sum(spare.values())
+        if total <= 0:
+            continue
+        f = (z["jobs"] - cap) / z["jobs"]      # share of the block's jobs that moves
+        before = z["jobs"]
+        orig = {c: z[c] for c in fields}
+        orig_od = {key: internal_od[key] for key in sorted(od_by_work[src])}
+        for i in near:
+            w = f * spare[i] / total
+            if w <= 0:
+                continue
+            for c in fields:
+                k = int(orig[c] * w)
+                zones[i][c] += k
+                zones[src][c] -= k
+            for key, n in orig_od.items():
+                k = int(n * w)
+                if k:
+                    internal_od[key] -= k
+                    internal_od[(key[0], i)] += k
+                    od_by_work[i].add((key[0], i))
+        moved.append((z["geoid"], before, z["jobs"]))
+    return moved
+
+
+def build(blocks, tracts, wac_rows, od_main_rows, od_aux_rows, bbox, year=LODES_YEAR, parking_osm=None, buildings=None):
     proj = Projection(bbox)
     s, w, n, e = bbox
     clat, clon = (s + n) / 2, (w + e) / 2
@@ -281,6 +373,13 @@ def build(blocks, tracts, wac_rows, od_main_rows, od_aux_rows, bbox, year=LODES_
         x, y = proj.xy(sp["lat"], sp["lon"])
         return {**sp, "x": round(x), "y": round(y)}
 
+    lumps = spread_lumped_jobs(zones, internal_od, floor_space_by_zone(buildings, zones), [site(c) for c in CAMPUS]) if buildings else []
+    internal_od = {k: v for k, v in internal_od.items() if v > 0}
+    for z in zones:
+        z["internal"] = 0
+    for (h, w_), k in internal_od.items():
+        zones[w_]["internal"] += k
+
     kept = [z for z in zones if z["pop"] or z["jobs"] or z["outbound"]]
     index = {id(z): i for i, z in enumerate(kept)}
     old_to_new = {i: index[id(z)] for i, z in enumerate(zones) if id(z) in index}
@@ -327,6 +426,8 @@ def build(blocks, tracts, wac_rows, od_main_rows, od_aux_rows, bbox, year=LODES_
         "outbound_by_sector": outbound_sector,
         "downtown": {"residents": tot("pop", downtown), "jobs": tot("jobs", downtown)},
         "internal_od_pairs": len(demand["internalOD"]),
+        # Blocks whose jobs were spread over nearby floor space: [GEOID, jobs in LODES, jobs kept].
+        "jobs_spread": [[g, a, b] for g, a, b in lumps],
         "parking": {
             "facilities": len(demand["parking"]),
             "spaces": sum(p["capacity"] for p in demand["parking"]),
@@ -337,9 +438,21 @@ def build(blocks, tracts, wac_rows, od_main_rows, od_aux_rows, bbox, year=LODES_
     }
     if abs(report["commuters"]["od_vs_wac_jobs"] - 1) > 0.05:
         report["warnings"].append("OD flows and WAC job counts differ by more than 5 %")
+    if not buildings:
+        report["warnings"].append("no building data: jobs filed under one block were not spread")
     if unplaced > 0.02 * max(1, report["commuters"]["inbound"]):
         report["warnings"].append(f"{unplaced} inbound commuters have no home tract position")
     return demand, report
+
+
+def load_buildings(path):
+    """data/mpls_buildings.js as a dict, or None if it is missing."""
+    if not path or not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    start = text.index("window.MPLS_BUILDINGS=") + len("window.MPLS_BUILDINGS=")
+    return json.loads(text[start:].strip().rstrip(";"))
 
 
 def load_inputs(raw_dir, year):
@@ -374,12 +487,13 @@ def main(argv=None):
     ap.add_argument("--input-dir", default="data/raw/demand")
     ap.add_argument("--out", default="data/mpls_demand.js")
     ap.add_argument("--report", default="data/mpls_demand.report.json")
+    ap.add_argument("--buildings", default="data/mpls_buildings.js", help="building footprints (tools/build_buildings.py)")
     args = ap.parse_args(argv)
     bbox = tuple(args.bbox)
     if args.fetch:
         fetch_all(bbox, args.input_dir, args.year)
     blocks, tracts, wac, od_main, od_aux, parking = load_inputs(args.input_dir, args.year)
-    demand, report = build(blocks, tracts, wac, od_main, od_aux, bbox, args.year, parking)
+    demand, report = build(blocks, tracts, wac, od_main, od_aux, bbox, args.year, parking, load_buildings(args.buildings))
     report["output_bytes"] = write_js(demand, args.out)
     with open(args.report, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)

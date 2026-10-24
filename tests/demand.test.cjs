@@ -1,7 +1,9 @@
 // Demand model (src/demand.js on data/mpls_demand.js) and the engine running it (src/sim.js):
 // Phase 5's exit checks — daily totals against Census/LODES and the plan's targets, sampled
-// agents scaling back to full size, a sensible AM/PM shape, day-of-week and event effects — plus
-// a seeded demand-driven simulation morning. Run: node tests/demand.test.cjs
+// agents scaling back to full size, a sensible AM/PM shape, day-of-week and event effects —
+// Phase 10's calibration against public counts (transit boardings, peak surges at single places,
+// jobs spread over floor space), and a seeded demand-driven simulation morning.
+// Run: node tests/demand.test.cjs
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -33,7 +35,7 @@ const within = (x, target, tol) => Math.abs(x / target - 1) <= tol;
   const targets = [
     ["jobs in the study area (LODES 2023)", report.jobs, 200000, 0.15],
     ["average weekday presence", presence, 0.75, 0.10],
-    ["UMN Minneapolis campus attendance, Wednesday (students + staff present)", wed.campusAttendance, 38000 + 0.92 * 25299, 0.10],
+    ["UMN Minneapolis campus attendance, Wednesday (students + staff present)", wed.campusAttendance, 38000 + 0.85 * 25299, 0.10],
   ];
   for (const [name, value, target, tol] of targets) assert.ok(within(value, target, tol), `${name}: ${Math.round(value)} vs ${target}`);
   // Downtown residents: the 2020 Census count inside the downtown outline is below the plan's
@@ -98,6 +100,53 @@ const within = (x, target, tol) => Math.abs(x / target - 1) <= tol;
     `(${Math.round(H[pm]).toLocaleString()}); inbound commuters arrive 06:30–09:30 and leave 15:00–19:00; Friday and Sunday lighter; a 66,000-fan game surges at its end.`);
 }
 
+// ------------------------------------------------------------ calibration against public counts
+{
+  const wed = demand.generate({ day: 2, sampling: 1 });
+  const transit = wed.all.filter((t) => t.mode === "shuttle");
+  // Fall 2025 Metro Transit stop counts: about 66,600 boardings a weekday in the study area
+  // (transfers included, suburban express buses not). Today's transit trips starting here
+  // should be of that order, and about as many end here.
+  const boardings = transit.filter((t) => t.from.zone != null).length, alightings = transit.filter((t) => t.to.zone != null).length;
+  assert.ok(within(boardings, 66600, 0.2) && within(alightings, 66600, 0.2), `transit trips from ${boardings} / to ${alightings} the area vs ~66,600 boardings`);
+  // ACS 2024: 81 % of Minneapolis commuters drive or carpool, 10 % ride transit.
+  const commutes = wed.all.filter((t) => t.purpose === "work" && t.from.sector != null);
+  const share = (m) => commutes.filter((t) => t.mode === m).length / commutes.length;
+  assert.ok(share("drive") > 0.7 && share("drive") < 0.85 && share("shuttle") > 0.08 && share("shuttle") < 0.2,
+    `commuters from outside: ${Math.round(share("drive") * 100)} % drive, ${Math.round(share("shuttle") * 100)} % transit`);
+  // Requests with today's transit replaced and 10 % of car trips moving to shuttles: no single
+  // place apart from a stadium after a game sees more than a few hundred in 15 minutes.
+  const rides = wed.all.filter((t) => t.mode === "shuttle" || (t.mode === "drive" && (t.tag % 1000) / 1000 >= 0.9));
+  const venue = raw.venues.find((v) => v.name === "Target Field");
+  const peak15 = (list) => { const m = list.map((t) => t.minute).sort((a, b) => a - b); let j = 0, best = 0; for (let i = 0; i < m.length; i++) { while (m[i] - m[j] >= 15) j++; best = Math.max(best, i - j + 1); } return best; };
+  const byPlace = new Map();
+  for (const t of rides) {
+    if (t.purpose === "event" || t.from.zone == null) continue;
+    (byPlace.get(t.from.zone) || byPlace.set(t.from.zone, []).get(t.from.zone)).push(t);
+  }
+  let worst = 0;
+  for (const list of byPlace.values()) worst = Math.max(worst, peak15(list));
+  assert.ok(worst < 400, `busiest pickup curb (events aside): ${worst} requests in 15 minutes`);
+  const office = [...demand.zones].sort((a, b) => b.office - a.office)[0];
+  const officeArrivals = peak15(rides.filter((t) => t.to.zone === office.i));
+  assert.ok(officeArrivals < 200, `largest office block (${office.office.toLocaleString()} office jobs): ${officeArrivals} shuttle arrivals in its peak 15 minutes`);
+  // LODES files all UMN jobs under one block; the build spreads them over campus floor space.
+  assert.ok(report.jobs_spread.length > 0 && Math.max(...raw.zones.jobs) < 10000, `largest block now ${Math.max(...raw.zones.jobs)} jobs`);
+  // Classes start on the UMN grid; students arrive for the first one.
+  const firstLegs = wed.all.filter((t) => t.purpose === "school" && !t.returning);
+  const before8 = firstLegs.filter((t) => t.minute >= 7 * 60 && t.minute < 8 * 60).length / firstLegs.length;
+  assert.ok(before8 > 0.15 && before8 < 0.4, `students leaving for an 8:00 class: ${Math.round(before8 * 100)} %`);
+  const changes = wed.all.filter((t) => t.purpose === "class change");
+  assert.ok(changes.every((t) => D.CLASSES.mwf.starts.some((s0) => t.minute >= s0 - 15 && t.minute <= s0 - 5)), "class changes in the passing time");
+  // Errands and visitors can be left out for a surge-only day.
+  const surge = demand.generate({ day: 2, background: false }).summary;
+  assert.ok(!surge.byPurpose.errand && !surge.byPurpose.visit && surge.byPurpose.work === demand.generate({ day: 2 }).summary.byPurpose.work);
+  const transitPeak = Math.max(...wed.summary.hourly.map((h) => h.shuttle));
+  console.log(`PASS: today's transit ${transit.length.toLocaleString()} trips a Wednesday (${boardings.toLocaleString()} from the area vs ~66,600 boardings), ` +
+    `peak hour ${Math.round(transitPeak).toLocaleString()}; commuters from outside ${Math.round(share("drive") * 100)} % by car, ${Math.round(share("shuttle") * 100)} % transit; ` +
+    `with 10 % of cars switching, at most ${worst} pickups at one curb and ${officeArrivals} arrivals at the largest office block in 15 minutes; UMN jobs spread over campus.`);
+}
+
 // ------------------------------------------------------------ the engine on Census demand
 {
   const graph = G.decodeMplsGraph(load("data/mpls_graph.js", "MPLS_GRAPH"));
@@ -125,16 +174,16 @@ const within = (x, target, tol) => Math.abs(x / target - 1) <= tol;
   assert.strictEqual(released, due, "every trip due so far was released once");
   assert.ok(S.unrouted <= 0.002 * released, `trips without a route: ${S.unrouted}`);
   const carShare = S.carTrips / (S.carTrips + S.shuttleTrips);
-  assert.ok(carShare > 0.15 && carShare < 0.4, `half of today's car trips switch to shuttles (car share now ${Math.round(carShare * 100)} %)`);
+  assert.ok(carShare > 0.6 && carShare < 0.85, `a tenth of today's car trips switch to shuttles (car share now ${Math.round(carShare * 100)} %)`);
   assert.ok(maxCars > 3000, `rush-hour private traffic (${maxCars} cars on the road)`);
-  // Gridlock relief should be rare: under 3 % of car and shuttle agent trips (the default fleet
-  // of 19,000 vehicles loads the network hard at the peak).
+  // Gridlock relief should be rare: under 3 % of car and shuttle agent trips (nine in ten of
+  // today's car trips still driven load the network hard at the peak).
   const agentTrips = S.carTrips / 20 + S.shuttleTrips / 10;   // cars sampled 1:20, riders 1:10
   assert.ok(sim.motion.stats.jumps < 0.03 * agentTrips, `gridlock jumps ${sim.motion.stats.jumps} of ${Math.round(agentTrips)} agent trips`);
-  // The car-share lever: all of today's drivers keep their cars.
-  const more = Sim.createSim(graph, { seed: 2, demand: raw, carShare: 1 });
-  more.run(20 * 150);
-  assert.ok(more.state.carTrips > 1.6 * S.carTrips * 150 / 210 * 0.8, "carShare 1 keeps today's car traffic");
+  // The car-share lever: half of today's drivers switch to shuttles.
+  const fewer = Sim.createSim(graph, { seed: 2, demand: raw, carShare: 0.5 });
+  fewer.run(20 * 210);
+  assert.ok(fewer.state.carTrips < 0.65 * S.carTrips && fewer.state.shuttleTrips > 1.5 * S.shuttleTrips, "carShare 0.5 moves cars to shuttles");
   console.log(`PASS: Census-demand morning 05:30–09:00 at 1:10 (cars 1:20): ${S.completed.toLocaleString()} rides (${S.completedPeople.toLocaleString()} people), ` +
     `${Math.round(carShare * 100)} % of motorised trips by car, up to ${maxCars.toLocaleString()} cars and ${maxRoad} agents on the road, ` +
     `${sim.motion.stats.jumps} gridlock jumps in ${Math.round(agentTrips).toLocaleString()} agent trips, ${S.unrouted} unrouted; audit clean.`);

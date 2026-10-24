@@ -3,7 +3,7 @@
 // writes its metrics as CSV. With --vary it runs one scenario per value and also writes a
 // summary table and chart.
 //
-//   node tools/run_scenario.cjs --until 10:00 --fleet 8000 --out-dir results/base
+//   node tools/run_scenario.cjs --until 10:00 --fleet 5000 --out-dir results/base
 //       -> summary.csv, series.csv (15-minute rows), bridges.csv (hourly crossings),
 //          distributions.csv (wait and ride minutes)
 //   node tools/run_scenario.cjs --vary fleet=2000,3000,4000,5000 --keep-transit --out-dir results/sweep
@@ -29,7 +29,7 @@ function load(file, key) {
   return sb.window[key];
 }
 
-const DEFAULTS = { fleet: 8000, mix: [0.1, 0.6, 0.3], carShare: 0.5, transitReplaced: true, pooling: 100, sampling: 10,
+const DEFAULTS = { fleet: 5000, mix: [0.1, 0.6, 0.3], carShare: 0.9, transitReplaced: true, pooling: 100, sampling: 10,
   day: 2, seed: 1, until: "10:00", ev: true, rebalance: true, vary: null, outDir: null };
 
 function parseArgs(argv) {
