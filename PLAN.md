@@ -412,8 +412,8 @@ Split into four steps so each lands green on its own.
   is relative, nothing loads from another host, titles and phone viewports, credits, local doc
   links resolve, data and screenshot size budgets, `.nojekyll`, no raw downloads or caches
   committed).
-- GitHub Pages: serve `main` from the repository root (Settings → Pages → Deploy from a branch).
-  The site is then https://jsherman999.github.io/pubtrans_mpls_opus/.
+- GitHub Pages: serves `main` from the repository root (enabled 2026-10-24); live at
+  https://jsherman999.github.io/pubtrans_mpls_opus/.
 - **Exit:** all suites pass; the pages load without console errors in desktop and phone Chrome.
 
 ## Performance budget (targets)
@@ -451,4 +451,4 @@ Split into four steps so each lands green on its own.
 | 7 | done | 10,680 OSM buildings with heights (parts for towers), footprints on the map, ride-along Driver POV with culling and LOD, six landmark designs; ~0.5 ms per POV frame in desktop Chrome downtown. |
 | Fleet fix | done | Riders/fleet 1:10 (sweeps 1:5), cars 1:20; dispatch index and rebalancing fixes; all-transit scenario is street-bound (~105k riders by 10:00), transit-kept scenario needs ~4,000 vehicles for 8.7 min. |
 | 8 | done | Metrics (VMT/VHT, deadhead, occupancy, utilisation, distributions, series, bridge loads), CSV export on the page, `tools/run_scenario.cjs` sweeps with CSV + SVG chart, recorded in `docs/results/`. |
-| 9 | done | README and ARCHITECTURE rewritten with screenshots, credits on both pages and in the README, phone layout fixes, publish checks (`tests/publish.test.cjs`). Pages to be enabled in the repository settings (main, root). |
+| 9 | done | README and ARCHITECTURE rewritten with screenshots, credits on both pages and in the README, phone layout fixes, publish checks (`tests/publish.test.cjs`). Pages enabled 2026-10-24 (main, root); both pages and every asset they load return 200. |
